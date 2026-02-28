@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>RPG Ultra Upgrade</title>
+<title>RPG Ultimate Web</title>
 <style>
-body { margin:0; overflow:hidden; background:#0d0d0d; }
-canvas { display:block; margin:auto; background:#141414; }
+body { margin:0; overflow:hidden; background:black; }
+canvas { display:block; margin:auto; background:#111; }
 </style>
 </head>
 <body>
@@ -18,13 +18,16 @@ const ctx = canvas.getContext("2d");
 canvas.width = 1000;
 canvas.height = 600;
 
-const world = { width: 3000, height: 3000 };
-const keys = {};
-
+let gameState = "menu";
+let keys = {};
+let camera = {x:0,y:0};
 let enemies = [];
-let slashes = [];
 let particles = [];
-let camera = { x:0, y:0 };
+let slashes = [];
+let boss = null;
+
+window.addEventListener("keydown", e=>keys[e.key]=true);
+window.addEventListener("keyup", e=>keys[e.key]=false);
 
 const player = {
     x:1500,
@@ -35,28 +38,60 @@ const player = {
     maxHp:100,
     xp:0,
     level:1,
+    gold:0,
+    class:"Knight",
     direction:0,
-    attackCooldown:0,
-    specialCooldown:0
+    attackCooldown:0
 };
 
-window.addEventListener("keydown", e=>keys[e.key]=true);
-window.addEventListener("keyup", e=>keys[e.key]=false);
+function saveGame(){
+    localStorage.setItem("ultimateRPG", JSON.stringify(player));
+}
+function loadGame(){
+    const save = localStorage.getItem("ultimateRPG");
+    if(save) Object.assign(player, JSON.parse(save));
+}
+loadGame();
 
-function spawnEnemy(){
-    const scale = 1 + player.level * 0.2;
-    enemies.push({
-        x:Math.random()*world.width,
-        y:Math.random()*world.height,
-        radius:18,
-        maxHp:60*scale,
-        hp:60*scale,
-        speed:1.4,
-        xpValue:20*scale
-    });
+function applyClassStats(){
+    if(player.class==="Knight"){
+        player.maxHp=150;
+        player.speed=3.5;
+    }
+    if(player.class==="Mage"){
+        player.maxHp=80;
+        player.speed=4;
+    }
+    if(player.class==="Assassin"){
+        player.maxHp=100;
+        player.speed=5;
+    }
+    player.hp=player.maxHp;
 }
 
-for(let i=0;i<20;i++) spawnEnemy();
+function spawnEnemy(){
+    enemies.push({
+        x:Math.random()*3000,
+        y:Math.random()*3000,
+        radius:18,
+        hp:60,
+        maxHp:60,
+        speed:1.4,
+        xpValue:25
+    });
+}
+for(let i=0;i<25;i++) spawnEnemy();
+
+function spawnBoss(){
+    boss={
+        x:2000,
+        y:2000,
+        radius:60,
+        hp:1000,
+        maxHp:1000,
+        phase:1
+    };
+}
 
 function attack(){
     if(player.attackCooldown>0) return;
@@ -75,32 +110,25 @@ function attack(){
         const dy=e.y-player.y;
         const dist=Math.sqrt(dx*dx+dy*dy);
         if(dist<100){
-            e.hp-=20+player.level*4;
-            createHitParticles(e.x,e.y);
+            e.hp-=20+player.level*5;
+            createParticles(e.x,e.y);
         }
     });
-}
 
-function special(){
-    if(player.specialCooldown>0) return;
-    player.specialCooldown=300;
-
-    enemies.forEach(e=>{
-        const dx=e.x-player.x;
-        const dy=e.y-player.y;
+    if(boss){
+        const dx=boss.x-player.x;
+        const dy=boss.y-player.y;
         const dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<250){
-            e.hp-=60;
-            createHitParticles(e.x,e.y);
+        if(dist<120){
+            boss.hp-=30;
         }
-    });
+    }
 }
 
-function createHitParticles(x,y){
-    for(let i=0;i<8;i++){
+function createParticles(x,y){
+    for(let i=0;i<6;i++){
         particles.push({
-            x:x,
-            y:y,
+            x,y,
             dx:(Math.random()-0.5)*6,
             dy:(Math.random()-0.5)*6,
             life:30
@@ -108,10 +136,9 @@ function createHitParticles(x,y){
     }
 }
 
-function update(){
+function updateGame(){
 
     let dx=0,dy=0;
-
     if(keys["w"]) dy-=1;
     if(keys["s"]) dy+=1;
     if(keys["a"]) dx-=1;
@@ -126,10 +153,7 @@ function update(){
     }
 
     if(keys[" "]) attack();
-    if(keys["e"]) special();
-
     if(player.attackCooldown>0) player.attackCooldown--;
-    if(player.specialCooldown>0) player.specialCooldown--;
 
     enemies.forEach(e=>{
         const dx=player.x-e.x;
@@ -145,22 +169,40 @@ function update(){
     enemies=enemies.filter(e=>{
         if(e.hp<=0){
             player.xp+=e.xpValue;
+            player.gold+=10;
             spawnEnemy();
             return false;
         }
         return true;
     });
 
-    const needed = player.level*100;
-    if(player.xp>=needed){
-        player.xp-=needed;
+    if(player.xp>=player.level*100){
+        player.xp-=player.level*100;
         player.level++;
-        player.maxHp+=30;
+        player.maxHp+=20;
         player.hp=player.maxHp;
     }
 
-    slashes.forEach(s=>s.life--);
-    slashes=slashes.filter(s=>s.life>0);
+    if(player.level>=5 && !boss) spawnBoss();
+
+    if(boss){
+        const dx=player.x-boss.x;
+        const dy=player.y-boss.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        boss.x+=dx/dist*0.8;
+        boss.y+=dy/dist*0.8;
+
+        if(boss.hp<500 && boss.phase===1){
+            boss.phase=2;
+        }
+
+        if(dist<80) player.hp-=0.8;
+
+        if(boss.hp<=0){
+            player.gold+=500;
+            boss=null;
+        }
+    }
 
     particles.forEach(p=>{
         p.x+=p.dx;
@@ -169,105 +211,116 @@ function update(){
     });
     particles=particles.filter(p=>p.life>0);
 
-    // câmera suave
-    camera.x += ((player.x - canvas.width/2) - camera.x)*0.1;
-    camera.y += ((player.y - canvas.height/2) - camera.y)*0.1;
+    slashes.forEach(s=>s.life--);
+    slashes=slashes.filter(s=>s.life>0);
+
+    camera.x+=(player.x-canvas.width/2-camera.x)*0.1;
+    camera.y+=(player.y-canvas.height/2-camera.y)*0.1;
+
+    saveGame();
+}
+
+function drawBiomes(){
+    const biomeSize=1000;
+    for(let x=0;x<3;x++){
+        for(let y=0;y<3;y++){
+            ctx.fillStyle=(x+y)%2===0?"#133":"#311";
+            ctx.fillRect(x*biomeSize,y*biomeSize,biomeSize,biomeSize);
+        }
+    }
 }
 
 function drawPlayer(){
     ctx.save();
     ctx.translate(player.x,player.y);
-
     ctx.fillStyle="#00e5ff";
     ctx.beginPath();
     ctx.arc(0,0,player.radius,0,Math.PI*2);
     ctx.fill();
 
     ctx.rotate(player.direction);
-
-    // espada
     ctx.strokeStyle="white";
     ctx.lineWidth=5;
     ctx.beginPath();
     ctx.moveTo(0,0);
     ctx.lineTo(35,0);
     ctx.stroke();
-
     ctx.restore();
 }
 
-function drawEnemy(e){
-    ctx.fillStyle="#ff4444";
-    ctx.beginPath();
-    ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);
-    ctx.fill();
-
-    ctx.fillStyle="black";
-    ctx.beginPath();
-    ctx.arc(e.x+5,e.y-5,5,0,Math.PI*2);
-    ctx.fill();
-
-    ctx.fillStyle="red";
-    ctx.fillRect(e.x-20,e.y-30,40,5);
-    ctx.fillStyle="lime";
-    ctx.fillRect(e.x-20,e.y-30,40*(e.hp/e.maxHp),5);
-}
-
-function drawSlash(s){
-    const alpha=s.life/s.maxLife;
-    ctx.save();
-    ctx.translate(s.x,s.y);
-    ctx.rotate(s.angle);
-    ctx.strokeStyle="rgba(255,255,0,"+alpha+")";
-    ctx.lineWidth=10;
-    ctx.beginPath();
-    ctx.arc(0,0,70,-0.6,0.6);
-    ctx.stroke();
-    ctx.restore();
-}
-
-function drawParticles(){
-    particles.forEach(p=>{
-        ctx.fillStyle="orange";
-        ctx.globalAlpha=p.life/30;
-        ctx.fillRect(p.x,p.y,4,4);
-        ctx.globalAlpha=1;
+function drawEnemies(){
+    enemies.forEach(e=>{
+        ctx.fillStyle="red";
+        ctx.beginPath();
+        ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);
+        ctx.fill();
     });
+}
+
+function drawBoss(){
+    if(!boss) return;
+    ctx.fillStyle=boss.phase===1?"purple":"orange";
+    ctx.beginPath();
+    ctx.arc(boss.x,boss.y,boss.radius,0,Math.PI*2);
+    ctx.fill();
 }
 
 function drawUI(){
     ctx.fillStyle="white";
-    ctx.fillText("HP:",20,30);
-    ctx.fillStyle="red";
-    ctx.fillRect(60,20,200,15);
-    ctx.fillStyle="lime";
-    ctx.fillRect(60,20,200*(player.hp/player.maxHp),15);
+    ctx.fillText("Class: "+player.class,20,20);
+    ctx.fillText("Level: "+player.level,20,40);
+    ctx.fillText("Gold: "+player.gold,20,60);
 
-    ctx.fillText("Level: "+player.level,20,60);
-    ctx.fillText("XP:",20,80);
+    ctx.fillStyle="red";
+    ctx.fillRect(20,80,200,15);
+    ctx.fillStyle="lime";
+    ctx.fillRect(20,80,200*(player.hp/player.maxHp),15);
+
     ctx.fillStyle="purple";
-    ctx.fillRect(60,70,200*(player.xp/(player.level*100)),15);
+    ctx.fillRect(20,105,200*(player.xp/(player.level*100)),10);
 }
 
-function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+function drawMenu(){
+    ctx.fillStyle="white";
+    ctx.font="40px Arial";
+    ctx.fillText("RPG ULTIMATE",350,200);
+    ctx.font="20px Arial";
+    ctx.fillText("Pressione 1 - Knight",400,260);
+    ctx.fillText("Pressione 2 - Mage",400,290);
+    ctx.fillText("Pressione 3 - Assassin",400,320);
 
+    if(keys["1"]){ player.class="Knight"; applyClassStats(); gameState="game"; }
+    if(keys["2"]){ player.class="Mage"; applyClassStats(); gameState="game"; }
+    if(keys["3"]){ player.class="Assassin"; applyClassStats(); gameState="game"; }
+}
+
+function drawGame(){
     ctx.save();
     ctx.translate(-camera.x,-camera.y);
 
+    drawBiomes();
     drawPlayer();
-    enemies.forEach(drawEnemy);
-    slashes.forEach(drawSlash);
-    drawParticles();
+    drawEnemies();
+    drawBoss();
+
+    particles.forEach(p=>{
+        ctx.fillStyle="orange";
+        ctx.fillRect(p.x,p.y,4,4);
+    });
 
     ctx.restore();
-
     drawUI();
 }
 
 function loop(){
-    update();
-    draw();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(gameState==="menu") drawMenu();
+    else{
+        updateGame();
+        drawGame();
+    }
+
     requestAnimationFrame(loop);
 }
 
