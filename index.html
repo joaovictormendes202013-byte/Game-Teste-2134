@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Mini RPG Web</title>
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #111;
+    }
+    canvas {
+        display: block;
+        margin: auto;
+        background: #222;
+        border: 2px solid white;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 800;
+canvas.height = 500;
+
+const world = {
+    width: 2000,
+    height: 2000
+};
+
+// ================= PLAYER =================
+const player = {
+    x: 100,
+    y: 100,
+    width: 40,
+    height: 40,
+    speed: 4,
+    hp: 100,
+    maxHp: 100,
+    xp: 0,
+    level: 1,
+    attackCooldown: 0
+};
+
+// ================= CAMERA =================
+const camera = {
+    x: 0,
+    y: 0
+};
+
+// ================= CONTROLES =================
+const keys = {};
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+// ================= INIMIGOS =================
+let enemies = [];
+
+function spawnEnemy() {
+    enemies.push({
+        x: Math.random() * world.width,
+        y: Math.random() * world.height,
+        width: 40,
+        height: 40,
+        hp: 30,
+        speed: 1.5
+    });
+}
+
+for (let i = 0; i < 10; i++) spawnEnemy();
+
+// ================= ATAQUE =================
+function attack() {
+    if (player.attackCooldown > 0) return;
+
+    player.attackCooldown = 30;
+
+    enemies.forEach(enemy => {
+        const dx = enemy.x - player.x;
+        const dy = enemy.y - player.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 80) {
+            enemy.hp -= 20;
+        }
+    });
+}
+
+// ================= LEVEL UP =================
+function checkLevelUp() {
+    const neededXp = player.level * 50;
+    if (player.xp >= neededXp) {
+        player.xp -= neededXp;
+        player.level++;
+        player.maxHp += 20;
+        player.hp = player.maxHp;
+        alert("LEVEL UP! Agora você é nível " + player.level);
+    }
+}
+
+// ================= UPDATE =================
+function update() {
+
+    // Movimento
+    if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
+    if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
+    if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
+    if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+
+    // Limites do mundo
+    player.x = Math.max(0, Math.min(world.width - player.width, player.x));
+    player.y = Math.max(0, Math.min(world.height - player.height, player.y));
+
+    // Ataque
+    if (keys[" "]) attack();
+    if (player.attackCooldown > 0) player.attackCooldown--;
+
+    // Inimigos seguem player
+    enemies.forEach(enemy => {
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 5) {
+            enemy.x += dx / distance * enemy.speed;
+            enemy.y += dy / distance * enemy.speed;
+        }
+
+        // Colisão dano
+        if (distance < 35) {
+            player.hp -= 0.3;
+        }
+    });
+
+    // Remove mortos
+    enemies = enemies.filter(enemy => {
+        if (enemy.hp <= 0) {
+            player.xp += 20;
+            spawnEnemy();
+            return false;
+        }
+        return true;
+    });
+
+    checkLevelUp();
+
+    if (player.hp <= 0) {
+        alert("Você morreu!");
+        location.reload();
+    }
+
+    // Atualiza câmera
+    camera.x = player.x - canvas.width / 2;
+    camera.y = player.y - canvas.height / 2;
+
+    camera.x = Math.max(0, Math.min(world.width - canvas.width, camera.x));
+    camera.y = Math.max(0, Math.min(world.height - canvas.height, camera.y));
+}
+
+// ================= DRAW =================
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    // Player
+    ctx.fillStyle = "cyan";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    // Inimigos
+    enemies.forEach(enemy => {
+        ctx.fillStyle = "red";
+        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+        // HP inimigo
+        ctx.fillStyle = "green";
+        ctx.fillRect(enemy.x, enemy.y - 10, enemy.hp, 5);
+    });
+
+    ctx.restore();
+
+    // UI
+    ctx.fillStyle = "white";
+    ctx.fillText("HP: " + Math.floor(player.hp) + "/" + player.maxHp, 20, 20);
+    ctx.fillText("XP: " + player.xp, 20, 40);
+    ctx.fillText("Level: " + player.level, 20, 60);
+}
+
+// ================= LOOP =================
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
