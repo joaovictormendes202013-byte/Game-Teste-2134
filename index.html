@@ -2,167 +2,191 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Mini RPG Web</title>
+<title>Mini RPG Melhorado</title>
 <style>
-    body {
-        margin: 0;
-        overflow: hidden;
-        background: #111;
-    }
-    canvas {
-        display: block;
-        margin: auto;
-        background: #222;
-        border: 2px solid white;
-    }
+body {
+    margin: 0;
+    overflow: hidden;
+    background: linear-gradient(#111, #000);
+}
+canvas {
+    display: block;
+    margin: auto;
+    background: #1a1a1a;
+}
 </style>
 </head>
 <body>
-
 <canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 800;
-canvas.height = 500;
+canvas.width = 900;
+canvas.height = 600;
 
-const world = {
-    width: 2000,
-    height: 2000
-};
+const world = { width: 2500, height: 2500 };
 
-// ================= PLAYER =================
 const player = {
-    x: 100,
-    y: 100,
-    width: 40,
-    height: 40,
+    x: 300,
+    y: 300,
+    size: 40,
     speed: 4,
     hp: 100,
     maxHp: 100,
     xp: 0,
     level: 1,
+    direction: "down",
     attackCooldown: 0
 };
 
-// ================= CAMERA =================
-const camera = {
-    x: 0,
-    y: 0
-};
-
-// ================= CONTROLES =================
+const camera = { x: 0, y: 0 };
 const keys = {};
+let enemies = [];
+let slashes = [];
+
 window.addEventListener("keydown", e => keys[e.key] = true);
 window.addEventListener("keyup", e => keys[e.key] = false);
-
-// ================= INIMIGOS =================
-let enemies = [];
 
 function spawnEnemy() {
     enemies.push({
         x: Math.random() * world.width,
         y: Math.random() * world.height,
-        width: 40,
-        height: 40,
-        hp: 30,
-        speed: 1.5
+        size: 35,
+        hp: 40,
+        maxHp: 40,
+        speed: 1.5,
+        knockbackX: 0,
+        knockbackY: 0
     });
 }
 
-for (let i = 0; i < 10; i++) spawnEnemy();
+for (let i = 0; i < 15; i++) spawnEnemy();
 
-// ================= ATAQUE =================
 function attack() {
     if (player.attackCooldown > 0) return;
 
-    player.attackCooldown = 30;
+    player.attackCooldown = 25;
+
+    const range = 70;
+    let hitbox = { x: player.x, y: player.y, w: 50, h: 50 };
+
+    if (player.direction === "up") hitbox.y -= range;
+    if (player.direction === "down") hitbox.y += range;
+    if (player.direction === "left") hitbox.x -= range;
+    if (player.direction === "right") hitbox.x += range;
+
+    slashes.push({
+        ...hitbox,
+        life: 10,
+        direction: player.direction
+    });
 
     enemies.forEach(enemy => {
-        const dx = enemy.x - player.x;
-        const dy = enemy.y - player.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (
+            enemy.x < hitbox.x + hitbox.w &&
+            enemy.x + enemy.size > hitbox.x &&
+            enemy.y < hitbox.y + hitbox.h &&
+            enemy.y + enemy.size > hitbox.y
+        ) {
+            const damage = 15 + player.level * 3;
+            enemy.hp -= damage;
 
-        if (distance < 80) {
-            enemy.hp -= 20;
+            // Knockback
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            enemy.knockbackX = (dx/dist) * 6;
+            enemy.knockbackY = (dy/dist) * 6;
         }
     });
 }
 
-// ================= LEVEL UP =================
-function checkLevelUp() {
-    const neededXp = player.level * 50;
-    if (player.xp >= neededXp) {
-        player.xp -= neededXp;
-        player.level++;
-        player.maxHp += 20;
-        player.hp = player.maxHp;
-        alert("LEVEL UP! Agora você é nível " + player.level);
-    }
-}
-
-// ================= UPDATE =================
 function update() {
 
-    // Movimento
-    if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
-    if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
-    if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
-    if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+    // Movimento + direção
+    if (keys["w"] || keys["ArrowUp"]) {
+        player.y -= player.speed;
+        player.direction = "up";
+    }
+    if (keys["s"] || keys["ArrowDown"]) {
+        player.y += player.speed;
+        player.direction = "down";
+    }
+    if (keys["a"] || keys["ArrowLeft"]) {
+        player.x -= player.speed;
+        player.direction = "left";
+    }
+    if (keys["d"] || keys["ArrowRight"]) {
+        player.x += player.speed;
+        player.direction = "right";
+    }
 
-    // Limites do mundo
-    player.x = Math.max(0, Math.min(world.width - player.width, player.x));
-    player.y = Math.max(0, Math.min(world.height - player.height, player.y));
+    player.x = Math.max(0, Math.min(world.width - player.size, player.x));
+    player.y = Math.max(0, Math.min(world.height - player.size, player.y));
 
-    // Ataque
     if (keys[" "]) attack();
     if (player.attackCooldown > 0) player.attackCooldown--;
 
-    // Inimigos seguem player
     enemies.forEach(enemy => {
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = Math.sqrt(dx*dx + dy*dy);
 
-        if (distance > 5) {
-            enemy.x += dx / distance * enemy.speed;
-            enemy.y += dy / distance * enemy.speed;
+        if (dist > 5) {
+            enemy.x += dx/dist * enemy.speed;
+            enemy.y += dy/dist * enemy.speed;
         }
 
-        // Colisão dano
-        if (distance < 35) {
-            player.hp -= 0.3;
+        enemy.x += enemy.knockbackX;
+        enemy.y += enemy.knockbackY;
+        enemy.knockbackX *= 0.8;
+        enemy.knockbackY *= 0.8;
+
+        if (dist < 30) {
+            player.hp -= 0.4;
         }
     });
 
-    // Remove mortos
     enemies = enemies.filter(enemy => {
         if (enemy.hp <= 0) {
-            player.xp += 20;
+            player.xp += 25;
             spawnEnemy();
             return false;
         }
         return true;
     });
 
-    checkLevelUp();
-
-    if (player.hp <= 0) {
-        alert("Você morreu!");
-        location.reload();
+    const neededXp = player.level * 60;
+    if (player.xp >= neededXp) {
+        player.xp -= neededXp;
+        player.level++;
+        player.maxHp += 25;
+        player.hp = player.maxHp;
     }
 
-    // Atualiza câmera
+    if (player.hp <= 0) {
+        player.hp = 0;
+    }
+
     camera.x = player.x - canvas.width / 2;
     camera.y = player.y - canvas.height / 2;
 
     camera.x = Math.max(0, Math.min(world.width - canvas.width, camera.x));
     camera.y = Math.max(0, Math.min(world.height - canvas.height, camera.y));
+
+    slashes.forEach(s => s.life--);
+    slashes = slashes.filter(s => s.life > 0);
 }
 
-// ================= DRAW =================
+function drawHealthBar(x, y, width, height, hp, maxHp) {
+    ctx.fillStyle = "red";
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = "lime";
+    ctx.fillRect(x, y, width * (hp / maxHp), height);
+}
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -170,29 +194,40 @@ function draw() {
     ctx.translate(-camera.x, -camera.y);
 
     // Player
-    ctx.fillStyle = "cyan";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
+    ctx.fillStyle = "#00ffff";
+    ctx.fillRect(player.x, player.y, player.size, player.size);
 
     // Inimigos
     enemies.forEach(enemy => {
-        ctx.fillStyle = "red";
-        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+        ctx.fillStyle = "#aa0000";
+        ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+        drawHealthBar(enemy.x, enemy.y - 8, enemy.size, 5, enemy.hp, enemy.maxHp);
+    });
 
-        // HP inimigo
-        ctx.fillStyle = "green";
-        ctx.fillRect(enemy.x, enemy.y - 10, enemy.hp, 5);
+    // Slash
+    slashes.forEach(s => {
+        ctx.fillStyle = "rgba(255,255,0,0.6)";
+        ctx.fillRect(s.x, s.y, s.w, s.h);
     });
 
     ctx.restore();
 
     // UI
     ctx.fillStyle = "white";
-    ctx.fillText("HP: " + Math.floor(player.hp) + "/" + player.maxHp, 20, 20);
-    ctx.fillText("XP: " + player.xp, 20, 40);
+    ctx.font = "16px Arial";
+    ctx.fillText("HP:", 20, 30);
+    drawHealthBar(60, 18, 200, 15, player.hp, player.maxHp);
+
     ctx.fillText("Level: " + player.level, 20, 60);
+    ctx.fillText("XP: " + player.xp + "/" + (player.level*60), 20, 80);
+
+    if (player.hp <= 0) {
+        ctx.fillStyle = "white";
+        ctx.font = "50px Arial";
+        ctx.fillText("VOCÊ MORREU", canvas.width/2 - 170, canvas.height/2);
+    }
 }
 
-// ================= LOOP =================
 function gameLoop() {
     update();
     draw();
@@ -201,6 +236,5 @@ function gameLoop() {
 
 gameLoop();
 </script>
-
 </body>
 </html>
