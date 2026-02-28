@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>RPG Visual Upgrade</title>
+<title>RPG Ultra Upgrade</title>
 <style>
-body { margin:0; overflow:hidden; background:#0f0f0f; }
-canvas { display:block; margin:auto; background:#181818; }
+body { margin:0; overflow:hidden; background:#0d0d0d; }
+canvas { display:block; margin:auto; background:#141414; }
 </style>
 </head>
 <body>
@@ -15,61 +15,68 @@ canvas { display:block; margin:auto; background:#181818; }
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 900;
+canvas.width = 1000;
 canvas.height = 600;
 
+const world = { width: 3000, height: 3000 };
 const keys = {};
+
 let enemies = [];
 let slashes = [];
-let specialEffects = [];
+let particles = [];
+let camera = { x:0, y:0 };
 
 const player = {
-    x: 400,
-    y: 300,
-    radius: 20,
-    speed: 4,
-    hp: 100,
-    maxHp: 100,
-    level: 1,
-    direction: 0, // radianos
-    attackCooldown: 0,
-    specialCooldown: 0
+    x:1500,
+    y:1500,
+    radius:20,
+    speed:4,
+    hp:100,
+    maxHp:100,
+    xp:0,
+    level:1,
+    direction:0,
+    attackCooldown:0,
+    specialCooldown:0
 };
 
-window.addEventListener("keydown", e => keys[e.key] = true);
-window.addEventListener("keyup", e => keys[e.key] = false);
+window.addEventListener("keydown", e=>keys[e.key]=true);
+window.addEventListener("keyup", e=>keys[e.key]=false);
 
 function spawnEnemy(){
+    const scale = 1 + player.level * 0.2;
     enemies.push({
-        x: Math.random()*2000,
-        y: Math.random()*2000,
-        radius: 18,
-        hp: 60,
-        maxHp: 60,
-        speed: 1.5
+        x:Math.random()*world.width,
+        y:Math.random()*world.height,
+        radius:18,
+        maxHp:60*scale,
+        hp:60*scale,
+        speed:1.4,
+        xpValue:20*scale
     });
 }
 
-for(let i=0;i<15;i++) spawnEnemy();
+for(let i=0;i<20;i++) spawnEnemy();
 
 function attack(){
     if(player.attackCooldown>0) return;
-    player.attackCooldown=25;
+    player.attackCooldown=20;
 
     slashes.push({
-        x: player.x,
-        y: player.y,
-        angle: player.direction,
-        life: 12,
-        maxLife: 12
+        x:player.x,
+        y:player.y,
+        angle:player.direction,
+        life:10,
+        maxLife:10
     });
 
     enemies.forEach(e=>{
         const dx=e.x-player.x;
         const dy=e.y-player.y;
         const dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<90){
-            e.hp-=20+player.level*3;
+        if(dist<100){
+            e.hp-=20+player.level*4;
+            createHitParticles(e.x,e.y);
         }
     });
 }
@@ -78,21 +85,27 @@ function special(){
     if(player.specialCooldown>0) return;
     player.specialCooldown=300;
 
-    specialEffects.push({
-        x: player.x,
-        y: player.y,
-        radius: 0,
-        maxRadius: 200
-    });
-
     enemies.forEach(e=>{
         const dx=e.x-player.x;
         const dy=e.y-player.y;
         const dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<200){
-            e.hp-=50;
+        if(dist<250){
+            e.hp-=60;
+            createHitParticles(e.x,e.y);
         }
     });
+}
+
+function createHitParticles(x,y){
+    for(let i=0;i<8;i++){
+        particles.push({
+            x:x,
+            y:y,
+            dx:(Math.random()-0.5)*6,
+            dy:(Math.random()-0.5)*6,
+            life:30
+        });
+    }
 }
 
 function update(){
@@ -104,7 +117,7 @@ function update(){
     if(keys["a"]) dx-=1;
     if(keys["d"]) dx+=1;
 
-    if(dx!==0 || dy!==0){
+    if(dx||dy){
         const len=Math.sqrt(dx*dx+dy*dy);
         dx/=len; dy/=len;
         player.x+=dx*player.speed;
@@ -126,40 +139,58 @@ function update(){
             e.x+=dx/dist*e.speed;
             e.y+=dy/dist*e.speed;
         }
-        if(dist<30) player.hp-=0.2;
+        if(dist<30) player.hp-=0.3;
     });
 
     enemies=enemies.filter(e=>{
-        if(e.hp<=0){ spawnEnemy(); return false;}
+        if(e.hp<=0){
+            player.xp+=e.xpValue;
+            spawnEnemy();
+            return false;
+        }
         return true;
     });
+
+    const needed = player.level*100;
+    if(player.xp>=needed){
+        player.xp-=needed;
+        player.level++;
+        player.maxHp+=30;
+        player.hp=player.maxHp;
+    }
 
     slashes.forEach(s=>s.life--);
     slashes=slashes.filter(s=>s.life>0);
 
-    specialEffects.forEach(s=>{
-        s.radius+=15;
+    particles.forEach(p=>{
+        p.x+=p.dx;
+        p.y+=p.dy;
+        p.life--;
     });
-    specialEffects=specialEffects.filter(s=>s.radius<s.maxRadius);
+    particles=particles.filter(p=>p.life>0);
+
+    // câmera suave
+    camera.x += ((player.x - canvas.width/2) - camera.x)*0.1;
+    camera.y += ((player.y - canvas.height/2) - camera.y)*0.1;
 }
 
 function drawPlayer(){
     ctx.save();
     ctx.translate(player.x,player.y);
 
-    // corpo
     ctx.fillStyle="#00e5ff";
     ctx.beginPath();
     ctx.arc(0,0,player.radius,0,Math.PI*2);
     ctx.fill();
 
-    // arma apontando
     ctx.rotate(player.direction);
+
+    // espada
     ctx.strokeStyle="white";
-    ctx.lineWidth=4;
+    ctx.lineWidth=5;
     ctx.beginPath();
     ctx.moveTo(0,0);
-    ctx.lineTo(30,0);
+    ctx.lineTo(35,0);
     ctx.stroke();
 
     ctx.restore();
@@ -171,13 +202,11 @@ function drawEnemy(e){
     ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);
     ctx.fill();
 
-    // olho
     ctx.fillStyle="black";
     ctx.beginPath();
     ctx.arc(e.x+5,e.y-5,5,0,Math.PI*2);
     ctx.fill();
 
-    // barra hp
     ctx.fillStyle="red";
     ctx.fillRect(e.x-20,e.y-30,40,5);
     ctx.fillStyle="lime";
@@ -185,26 +214,25 @@ function drawEnemy(e){
 }
 
 function drawSlash(s){
-    const progress=s.life/s.maxLife;
+    const alpha=s.life/s.maxLife;
     ctx.save();
     ctx.translate(s.x,s.y);
     ctx.rotate(s.angle);
-
-    ctx.strokeStyle="rgba(255,255,0,"+progress+")";
-    ctx.lineWidth=8;
+    ctx.strokeStyle="rgba(255,255,0,"+alpha+")";
+    ctx.lineWidth=10;
     ctx.beginPath();
-    ctx.arc(0,0,60,-0.5,0.5);
+    ctx.arc(0,0,70,-0.6,0.6);
     ctx.stroke();
-
     ctx.restore();
 }
 
-function drawSpecial(s){
-    ctx.strokeStyle="rgba(0,150,255,0.6)";
-    ctx.lineWidth=5;
-    ctx.beginPath();
-    ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);
-    ctx.stroke();
+function drawParticles(){
+    particles.forEach(p=>{
+        ctx.fillStyle="orange";
+        ctx.globalAlpha=p.life/30;
+        ctx.fillRect(p.x,p.y,4,4);
+        ctx.globalAlpha=1;
+    });
 }
 
 function drawUI(){
@@ -214,15 +242,26 @@ function drawUI(){
     ctx.fillRect(60,20,200,15);
     ctx.fillStyle="lime";
     ctx.fillRect(60,20,200*(player.hp/player.maxHp),15);
+
+    ctx.fillText("Level: "+player.level,20,60);
+    ctx.fillText("XP:",20,80);
+    ctx.fillStyle="purple";
+    ctx.fillRect(60,70,200*(player.xp/(player.level*100)),15);
 }
 
 function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
+    ctx.save();
+    ctx.translate(-camera.x,-camera.y);
+
     drawPlayer();
     enemies.forEach(drawEnemy);
     slashes.forEach(drawSlash);
-    specialEffects.forEach(drawSpecial);
+    drawParticles();
+
+    ctx.restore();
+
     drawUI();
 }
 
