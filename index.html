@@ -2,10 +2,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>RPG Dungeon System</title>
+<title>RPG Advanced</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; font-family:Arial; }
-canvas { display:block; margin:auto; background:#1b1b2f; }
+canvas { display:block; margin:auto; background:#0f0f1a; }
 </style>
 </head>
 <body>
@@ -17,393 +17,314 @@ const ctx = canvas.getContext("2d");
 canvas.width = 1100;
 canvas.height = 650;
 
-let state = "lobby";
-let keys = {};
-let mouse = {x:0,y:0,clicked:false};
-
-window.addEventListener("keydown", e=>keys[e.key]=true);
-window.addEventListener("keyup", e=>keys[e.key]=false);
-canvas.addEventListener("mousemove", e=>{
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
+let state="lobby";
+let keys={}, mouse={x:0,y:0,clicked:false};
+window.addEventListener("keydown",e=>keys[e.key]=true);
+window.addEventListener("keyup",e=>keys[e.key]=false);
+canvas.addEventListener("mousemove",e=>{
+let r=canvas.getBoundingClientRect();
+mouse.x=e.clientX-r.left;
+mouse.y=e.clientY-r.top;
 });
-canvas.addEventListener("mousedown", ()=> mouse.clicked = true);
+canvas.addEventListener("mousedown",()=>mouse.clicked=true);
+
+/* ================= RARITY ================= */
+
+const rarityColors={
+common:"white",
+rare:"cyan",
+epic:"purple",
+legendary:"orange"
+};
 
 /* ================= PLAYER ================= */
 
-const rarityColors = {
-    common:"white",
-    rare:"cyan",
-    epic:"purple",
-    legendary:"orange"
+const player={
+x:550,y:500,
+hp:100,maxHp:100,
+speed:4,
+damage:15,
+baseDefense:2,
+iframe:0,
+slashCooldown:0,
+direction:0,
+anim:0,
+inventory:[],
+equipment:{weapon:null,armor:null}
 };
 
-const player = {
-    x:550,y:325,
-    hp:100,maxHp:100,
-    speed:4,
-    level:1,
-    damage:15,
-    iframe:0,
-    slashCooldown:0,
-    direction:0,
-    inventory:[],
-    equipment:{
-        weapon:null,
-        armor:null
-    }
-};
+/* ================= DUNGEONS ================= */
 
-/* ================= NPC ================= */
+const dungeons=[
+{name:"Caverna Verde",difficulty:1},
+{name:"Templo Sombrio",difficulty:2},
+{name:"Abismo Infernal",difficulty:3}
+];
 
-const dungeonNPC = {
-    x:500,y:250,
-    width:100,
-    height:150
-};
-
-/* ================= DUNGEON ================= */
-
-let enemies = [];
-let projectiles = [];
-let boss = null;
-let dungeonActive = false;
-
-/* ================= INVENTORY ================= */
-
-let inventoryOpen = false;
+let selectedDungeon=null;
+let enemies=[], boss=null;
 
 /* ================= HELPERS ================= */
 
-function rand(min,max){ return Math.random()*(max-min)+min; }
-function dist(a,b,c,d){ return Math.hypot(a-c,b-d); }
+function rand(min,max){return Math.random()*(max-min)+min;}
+function dist(a,b,c,d){return Math.hypot(a-c,b-d);}
 
-/* ================= SPAWN ================= */
-
-function startDungeon(){
-    enemies = [];
-    projectiles = [];
-    boss = null;
-    dungeonActive = true;
-    state = "dungeon";
-
-    for(let i=0;i<6;i++){
-        enemies.push({
-            x:rand(200,900),
-            y:rand(150,550),
-            hp:50,
-            damage:10,
-            type:"melee"
-        });
-    }
-
-    for(let i=0;i<3;i++){
-        enemies.push({
-            x:rand(200,900),
-            y:rand(150,550),
-            hp:40,
-            damage:8,
-            shootCooldown:120,
-            type:"ranged"
-        });
-    }
+function getDefense(){
+let armorDef = player.equipment.armor ? player.equipment.armor.defense : 0;
+return player.baseDefense + armorDef;
 }
 
-/* ================= BOSS ================= */
+function calculateDamage(incoming){
+let reduced = incoming - (getDefense()*0.6);
+return Math.max(1,Math.floor(reduced));
+}
+
+/* ================= START DUNGEON ================= */
+
+function startDungeon(d){
+selectedDungeon=d;
+state="dungeon";
+enemies=[];
+boss=null;
+
+for(let i=0;i<5*d.difficulty;i++){
+enemies.push({
+x:rand(200,900),
+y:rand(100,400),
+hp:40*d.difficulty,
+damage:8*d.difficulty,
+type: Math.random()>0.5?"melee":"ranged",
+cool:120
+});
+}
+}
+
+/* ================= SPAWN BOSS ================= */
 
 function spawnBoss(){
-    boss = {
-        x:550,
-        y:200,
-        hp:400,
-        damage:20,
-        dashCooldown:180
-    };
-}
-
-/* ================= SLASH ================= */
-
-let slashes = [];
-
-function attack(){
-    if(player.slashCooldown>0) return;
-    player.slashCooldown = 20;
-
-    slashes.push({
-        x:player.x,
-        y:player.y,
-        angle:player.direction,
-        life:10
-    });
-
-    enemies.forEach(e=>{
-        if(dist(player.x,player.y,e.x,e.y)<80){
-            e.hp -= getDamage();
-        }
-    });
-
-    if(boss && dist(player.x,player.y,boss.x,boss.y)<100){
-        boss.hp -= getDamage();
-    }
-}
-
-function getDamage(){
-    let base = player.damage;
-    if(player.equipment.weapon){
-        base += player.equipment.weapon.power;
-    }
-    return base;
+boss={
+name:"Guardião "+selectedDungeon.name,
+x:550,y:150,
+hp:300*selectedDungeon.difficulty,
+maxHp:300*selectedDungeon.difficulty,
+damage:15*selectedDungeon.difficulty,
+dashCooldown:180,
+dashAnim:0
+};
 }
 
 /* ================= UPDATE ================= */
 
 function update(){
 
-    if(keys["i"]) inventoryOpen = !inventoryOpen;
-
-    if(state==="dungeon"){
-        movePlayer();
-        updateEnemies();
-        updateBoss();
-        updateProjectiles();
-        updateSlashes();
-    }
-
-    if(player.iframe>0) player.iframe--;
-    if(player.slashCooldown>0) player.slashCooldown--;
+if(state==="dungeon"){
+movePlayer();
+updateEnemies();
+updateBoss();
 }
+
+if(player.iframe>0) player.iframe--;
+if(player.slashCooldown>0) player.slashCooldown--;
+}
+
+/* ================= PLAYER ================= */
 
 function movePlayer(){
-    let dx=0,dy=0;
-    if(keys["w"]) dy--;
-    if(keys["s"]) dy++;
-    if(keys["a"]) dx--;
-    if(keys["d"]) dx++;
+let dx=0,dy=0;
+if(keys["w"])dy--;
+if(keys["s"])dy++;
+if(keys["a"])dx--;
+if(keys["d"])dx++;
 
-    if(dx||dy){
-        let len=Math.hypot(dx,dy);
-        dx/=len; dy/=len;
-        player.x+=dx*player.speed;
-        player.y+=dy*player.speed;
-        player.direction=Math.atan2(dy,dx);
-    }
-
-    if(keys[" "]) attack();
+if(dx||dy){
+let len=Math.hypot(dx,dy);
+dx/=len; dy/=len;
+player.x+=dx*player.speed;
+player.y+=dy*player.speed;
+player.direction=Math.atan2(dy,dx);
+player.anim+=0.2;
 }
+
+if(keys[" "]) attack();
+}
+
+function attack(){
+if(player.slashCooldown>0)return;
+player.slashCooldown=20;
+
+enemies.forEach(e=>{
+if(dist(player.x,player.y,e.x,e.y)<80){
+e.hp-=getPlayerDamage();
+}
+});
+
+if(boss && dist(player.x,player.y,boss.x,boss.y)<100){
+boss.hp-=getPlayerDamage();
+}
+}
+
+function getPlayerDamage(){
+let base=player.damage;
+if(player.equipment.weapon) base+=player.equipment.weapon.power;
+return base;
+}
+
+/* ================= ENEMIES ================= */
 
 function updateEnemies(){
-    enemies = enemies.filter(e=>{
-        if(e.hp<=0) return false;
+enemies=enemies.filter(e=>{
+if(e.hp<=0)return false;
 
-        if(e.type==="melee"){
-            let d=dist(player.x,player.y,e.x,e.y);
-            e.x += (player.x-e.x)/d*1.5;
-            e.y += (player.y-e.y)/d*1.5;
-            if(d<30) damagePlayer(e.damage);
-        }
+let d=dist(player.x,player.y,e.x,e.y);
 
-        if(e.type==="ranged"){
-            e.shootCooldown--;
-            if(e.shootCooldown<=0){
-                projectiles.push({
-                    x:e.x,
-                    y:e.y,
-                    dx:(player.x-e.x)/50,
-                    dy:(player.y-e.y)/50,
-                    damage:e.damage
-                });
-                e.shootCooldown=120;
-            }
-        }
-
-        return true;
-    });
-
-    if(enemies.length===0 && !boss){
-        spawnBoss();
-    }
+if(e.type==="melee"){
+e.x+=(player.x-e.x)/d*1.5;
+e.y+=(player.y-e.y)/d*1.5;
+if(d<30) damagePlayer(e.damage);
 }
+if(e.type==="ranged"){
+e.cool--;
+if(e.cool<=0){
+damagePlayer(e.damage);
+e.cool=120;
+}
+}
+return true;
+});
+
+if(enemies.length===0 && !boss){
+spawnBoss();
+}
+}
+
+/* ================= BOSS ================= */
 
 function updateBoss(){
-    if(!boss) return;
+if(!boss)return;
 
-    let d=dist(player.x,player.y,boss.x,boss.y);
-    boss.x += (player.x-boss.x)/d*1.2;
-    boss.y += (player.y-boss.y)/d*1.2;
+let d=dist(player.x,player.y,boss.x,boss.y);
 
-    boss.dashCooldown--;
-    if(boss.dashCooldown<=0){
-        boss.x += (player.x-boss.x)/d*60;
-        boss.y += (player.y-boss.y)/d*60;
-        boss.dashCooldown=180;
-    }
+boss.x+=(player.x-boss.x)/d*0.8;
+boss.y+=(player.y-boss.y)/d*0.8;
 
-    if(d<40) damagePlayer(boss.damage);
-
-    if(boss.hp<=0){
-        giveRandomLoot();
-        state="lobby";
-        dungeonActive=false;
-    }
+boss.dashCooldown--;
+if(boss.dashCooldown<=0){
+boss.dashAnim=20;
+boss.x+=(player.x-boss.x)/d*80;
+boss.y+=(player.y-boss.y)/d*80;
+boss.dashCooldown=200;
 }
 
-function updateProjectiles(){
-    projectiles = projectiles.filter(p=>{
-        p.x+=p.dx;
-        p.y+=p.dy;
-        if(dist(player.x,player.y,p.x,p.y)<20){
-            damagePlayer(p.damage);
-            return false;
-        }
-        return true;
-    });
+if(d<40) damagePlayer(boss.damage);
+
+if(boss.hp<=0){
+giveLoot();
+state="lobby";
+}
 }
 
-function updateSlashes(){
-    slashes.forEach(s=>s.life--);
-    slashes=slashes.filter(s=>s.life>0);
-}
+/* ================= DAMAGE ================= */
 
 function damagePlayer(amount){
-    if(player.iframe>0) return;
-    player.hp -= amount;
-    player.iframe = 30;
+if(player.iframe>0)return;
+let finalDamage=calculateDamage(amount);
+player.hp-=finalDamage;
+player.iframe=30;
 }
 
 /* ================= LOOT ================= */
 
-function giveRandomLoot(){
-    let rarities=["common","rare","epic","legendary"];
-    let r=rarities[Math.floor(Math.random()*rarities.length)];
+function giveLoot(){
+let rarities=["common","rare","epic","legendary"];
+let r=rarities[Math.floor(Math.random()*rarities.length)];
 
-    let item = {
-        name:"Sword",
-        type:"weapon",
-        power:Math.floor(rand(5,20)),
-        rarity:r
-    };
-
-    if(Math.random()>0.5){
-        item = {
-            name:"Armor",
-            type:"armor",
-            defense:Math.floor(rand(5,15)),
-            rarity:r
-        };
-    }
-
-    player.inventory.push(item);
+if(Math.random()>0.5){
+player.inventory.push({
+type:"weapon",
+power:rand(5,20)*selectedDungeon.difficulty,
+rarity:r
+});
+}else{
+player.inventory.push({
+type:"armor",
+defense:rand(3,10)*selectedDungeon.difficulty,
+rarity:r
+});
+}
 }
 
 /* ================= DRAW ================= */
 
 function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    if(state==="lobby"){
-        drawLobby();
-    }
-    if(state==="dungeon"){
-        drawDungeon();
-    }
-    if(inventoryOpen){
-        drawInventory();
-    }
+if(state==="lobby"){
+drawLobby();
+}
+if(state==="dungeon"){
+drawDungeon();
+}
 }
 
 function drawLobby(){
-    ctx.fillStyle="white";
-    ctx.fillText("Lobby - Clique no NPC para entrar na Dungeon",350,100);
+ctx.fillStyle="white";
+ctx.fillText("Escolha sua Dungeon:",450,150);
 
-    ctx.fillStyle="green";
-    ctx.fillRect(dungeonNPC.x,dungeonNPC.y,dungeonNPC.width,dungeonNPC.height);
+dungeons.forEach((d,i)=>{
+ctx.fillStyle="gray";
+ctx.fillRect(400,200+i*70,300,50);
+ctx.fillStyle="white";
+ctx.fillText(d.name,470,230+i*70);
 
-    if(mouse.clicked){
-        if(mouse.x>dungeonNPC.x && mouse.x<dungeonNPC.x+dungeonNPC.width &&
-           mouse.y>dungeonNPC.y && mouse.y<dungeonNPC.y+dungeonNPC.height){
-            startDungeon();
-        }
-    }
-    mouse.clicked=false;
+if(mouse.clicked){
+if(mouse.x>400 && mouse.x<700 &&
+mouse.y>200+i*70 && mouse.y<250+i*70){
+startDungeon(d);
+}
+}
+});
+mouse.clicked=false;
 }
 
 function drawDungeon(){
-    ctx.fillStyle="white";
-    ctx.fillText("Dungeon",20,20);
 
-    ctx.fillStyle=player.iframe>0?"red":"cyan";
-    ctx.beginPath();
-    ctx.arc(player.x,player.y,20,0,Math.PI*2);
-    ctx.fill();
+// player
+ctx.fillStyle=player.iframe>0?"red":"cyan";
+ctx.beginPath();
+ctx.arc(player.x,player.y,20+Math.sin(player.anim)*2,0,Math.PI*2);
+ctx.fill();
 
-    enemies.forEach(e=>{
-        ctx.fillStyle="crimson";
-        ctx.beginPath();
-        ctx.arc(e.x,e.y,15,0,Math.PI*2);
-        ctx.fill();
-    });
+// enemies
+enemies.forEach(e=>{
+ctx.fillStyle=e.type==="melee"?"crimson":"yellow";
+ctx.beginPath();
+ctx.arc(e.x,e.y,15,0,Math.PI*2);
+ctx.fill();
+});
 
-    projectiles.forEach(p=>{
-        ctx.fillStyle="yellow";
-        ctx.fillRect(p.x,p.y,5,5);
-    });
+// boss
+if(boss){
+ctx.fillStyle=boss.dashAnim>0?"orange":"purple";
+ctx.beginPath();
+ctx.arc(boss.x,boss.y,40,0,Math.PI*2);
+ctx.fill();
 
-    if(boss){
-        ctx.fillStyle="purple";
-        ctx.beginPath();
-        ctx.arc(boss.x,boss.y,40,0,Math.PI*2);
-        ctx.fill();
-    }
-
-    slashes.forEach(s=>{
-        ctx.strokeStyle = player.equipment.weapon ?
-            rarityColors[player.equipment.weapon.rarity] :
-            "white";
-        ctx.lineWidth=5;
-        ctx.beginPath();
-        ctx.arc(s.x,s.y,50,s.angle-0.5,s.angle+0.5);
-        ctx.stroke();
-    });
+// life bar
+ctx.fillStyle="black";
+ctx.fillRect(300,20,500,25);
+ctx.fillStyle="red";
+ctx.fillRect(300,20,500*(boss.hp/boss.maxHp),25);
+ctx.fillStyle="white";
+ctx.fillText(boss.name,480,15);
 }
-
-function drawInventory(){
-    ctx.fillStyle="rgba(0,0,0,0.8)";
-    ctx.fillRect(200,100,700,450);
-
-    ctx.fillStyle="white";
-    ctx.fillText("Inventário (clique para equipar)",450,130);
-
-    player.inventory.forEach((item,i)=>{
-        ctx.fillStyle=rarityColors[item.rarity];
-        ctx.fillText(
-            item.name+" - "+item.rarity,
-            300,
-            170+i*30
-        );
-
-        if(mouse.clicked){
-            if(mouse.x>300 && mouse.x<700 &&
-               mouse.y>150+i*30 && mouse.y<180+i*30){
-                if(item.type==="weapon"){
-                    player.equipment.weapon=item;
-                }
-                if(item.type==="armor"){
-                    player.equipment.armor=item;
-                }
-            }
-        }
-    });
-
-    mouse.clicked=false;
 }
 
 /* ================= LOOP ================= */
 
 function loop(){
-    update();
-    draw();
-    requestAnimationFrame(loop);
+update();
+draw();
+requestAnimationFrame(loop);
 }
 loop();
 </script>
