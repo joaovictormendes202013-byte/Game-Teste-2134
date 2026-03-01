@@ -48,6 +48,7 @@ let slotSelecionado = 0;
 let efeitoMasmorra = "";
 let questsAtivas = [];
 let pontosSkill = 0;
+let abaSelecionada = "personagem";    
 
 // Input
 window.addEventListener("keydown",e=>teclas[e.key]=true);
@@ -1038,337 +1039,381 @@ return 1.0;
 
 // ================= DESENHAR =================
 function desenhar(){
-ctx.save();
+    ctx.save();
 
-if(estado === "dungeon"){
-let tremerX = (Math.random()-0.5)*tremorTela;
-let tremerY = (Math.random()-0.5)*tremorTela;
-ctx.translate(-camera.x + tremerX, -camera.y + tremerY);
-} else {
-ctx.translate(0, 0);
-}
+    if(estado === "dungeon"){
+        let tremerX = (Math.random()-0.5)*tremorTela;
+        let tremerY = (Math.random()-0.5)*tremorTela;
+        ctx.translate(-camera.x + tremerX, -camera.y + tremerY);
+    } else {
+        ctx.translate(0, 0);
+    }
 
-if(estado==="lobby"){
-desenharLobby();
-}
-if(estado==="dungeon"){
-desenharMasmorra();
-}
+    if(estado==="lobby"){
+        desenharLobby();
+    }
+    if(estado==="dungeon"){
+        desenharMasmorra();
+    }
 
-ctx.restore();
-desenharUI();
+    ctx.restore();
+    desenharUI();
 }
 
 function desenharLobby(){
-ctx.fillStyle = "#0f1222";
-ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "#0f1222";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
 
-ctx.font = "bold 48px 'Segoe UI'";
-ctx.fillStyle = "#fff";
-ctx.shadowColor = "#4a9eff";
-ctx.shadowBlur = 20;
-ctx.fillText("⚔️ RPG AVANÇADO ⚔️", 250, 80);
-ctx.shadowBlur = 0;
-
-// Abas do lobby
-let abas = ["Personagem", "Inventário", "Skill Tree", "Quests"];
-let abaSelecionada = "personagem"; // Default
-
-// Botões de aba
-for(let i=0; i<4; i++){
-    let x = 100 + i*150;
-    let sobre = mouse.x > x && mouse.x < x+140 && mouse.y > 100 && mouse.y < 140;
-    ctx.fillStyle = sobre ? "#4a9eff" : "#2a2f3f";
-    ctx.fillRect(x, 100, 140, 40);
+    ctx.font = "bold 48px 'Segoe UI'";
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px Arial";
-    ctx.fillText(abas[i], x+20, 130);
+    ctx.shadowColor = "#4a9eff";
+    ctx.shadowBlur = 20;
+    ctx.fillText("⚔️ RPG AVANÇADO ⚔️", 250, 80);
+    ctx.shadowBlur = 0;
+
+    // Abas do lobby
+    let abas = ["Personagem", "Inventário", "Skill Tree", "Quests"];
     
-    if(mouse.clicado && sobre){
-        abaSelecionada = abas[i].toLowerCase();
+    // Botões de aba - CORRIGIDO: agora usa a variável global
+    for(let i=0; i<4; i++){
+        let x = 100 + i*150;
+        let sobre = mouse.x > x && mouse.x < x+140 && mouse.y > 100 && mouse.y < 140;
+        
+        // Destacar aba selecionada
+        let abaNome = abas[i].toLowerCase();
+        if(abaNome === "skill tree") abaNome = "skill tree";
+        if(abaNome === "inventário") abaNome = "inventário";
+        
+        ctx.fillStyle = (abaSelecionada === abaNome || 
+                        (abaSelecionada === "skill tree" && abas[i] === "Skill Tree") ||
+                        (abaSelecionada === "inventário" && abas[i] === "Inventário")) ? 
+                        "#4a9eff" : (sobre ? "#3a4f7f" : "#2a2f3f");
+        ctx.fillRect(x, 100, 140, 40);
+        
+        // Borda inferior na aba selecionada
+        if(abaSelecionada === abaNome || 
+           (abaSelecionada === "skill tree" && abas[i] === "Skill Tree") ||
+           (abaSelecionada === "inventário" && abas[i] === "Inventário")) {
+            ctx.fillStyle = "#ffaa00";
+            ctx.fillRect(x, 140, 140, 3);
+        }
+        
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Arial";
+        ctx.fillText(abas[i], x+20, 130);
+        
+        if(mouse.clicado && sobre){
+            let novaAba = abas[i].toLowerCase();
+            // CORRIGIDO: atualiza a variável global
+            abaSelecionada = novaAba;
+            console.log("Aba selecionada:", abaSelecionada); // Debug
+        }
     }
-}
 
-// Conteúdo baseado na aba
-if(abaSelecionada === "personagem"){
-    desenharAbaPersonagem();
-} else if(abaSelecionada === "inventário"){
-    desenharAbaInventario();
-} else if(abaSelecionada === "skill tree"){
-    desenharSkillTree();
-} else if(abaSelecionada === "quests"){
-    desenharQuests();
-}
+    // Área de conteúdo das abas - CORRIGIDO: todas as abas funcionam
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(40, 150, 1000, 400);
+    ctx.clip();
+    
+    // Conteúdo baseado na aba - CORRIGIDO: verificação melhorada
+    if(abaSelecionada === "personagem"){
+        desenharAbaPersonagem();
+    } else if(abaSelecionada === "inventário" || abaSelecionada === "inventario"){
+        desenharAbaInventario();
+    } else if(abaSelecionada === "skill tree" || abaSelecionada === "skilltree"){
+        desenharSkillTree();
+    } else if(abaSelecionada === "quests" || abaSelecionada === "quest"){
+        desenharQuests();
+    }
+    
+    ctx.restore();
 
-// 5 Masmorras (sempre visíveis)
-ctx.fillStyle = "#fff";
-ctx.font = "bold 24px Arial";
-ctx.fillText("MASMORRAS", 450, 200);
+    // Título da seção de masmorras
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 24px Arial";
+    ctx.fillText("MASMORRAS", 450, 200);
 
-masmorras.forEach((m,i)=>{
-let x = 380 + (i%2)*320;
-let y = 220 + Math.floor(i/2)*100;
-let sobre = mouse.x>x && mouse.x<x+300 && mouse.y>y && mouse.y<y+80;
+    // 5 Masmorras (sempre visíveis) - REPOSICIONADO para não sobrepor
+    masmorras.forEach((m,i)=>{
+        let x = 380 + (i%2)*320;
+        let y = 220 + Math.floor(i/2)*100;
+        let sobre = mouse.x>x && mouse.x<x+300 && mouse.y>y && mouse.y<y+80;
 
-ctx.fillStyle = sobre ? m.cor : "#2a2f3f";
-ctx.shadowBlur = sobre ? 25 : 10;
-ctx.fillRect(x,y,300,80);
+        ctx.fillStyle = sobre ? m.cor : "#2a2f3f";
+        ctx.shadowBlur = sobre ? 25 : 10;
+        ctx.shadowColor = "#000";
+        ctx.fillRect(x,y,300,80);
 
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.fillText(`${m.icon} ${m.nome}`, x+20, y+25);
-ctx.font = "12px Arial";
-ctx.fillText(`Dificuldade: ${m.dificuldade}`, x+20, y+45);
-ctx.fillText(m.descricao.substring(0,25)+"...", x+20, y+60);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px Arial";
+        ctx.fillText(`${m.icon} ${m.nome}`, x+20, y+25);
+        ctx.font = "12px Arial";
+        ctx.fillText(`Dificuldade: ${m.dificuldade}`, x+20, y+45);
+        ctx.fillText(m.descricao.substring(0,25)+"...", x+20, y+60);
 
-if(mouse.clicado && sobre){
-iniciarMasmorra(m);
-}
-});
+        if(mouse.clicado && sobre){
+            iniciarMasmorra(m);
+        }
+    });
 
-if(mouse.clicado) mouse.clicado=false;
+    // CORRIGIDO: reset do clique para não ficar preso
+    if(mouse.clicado) {
+        mouse.clicado = false;
+    }
 }
 
 function desenharAbaPersonagem(){
-// Card do jogador
-ctx.fillStyle = "#2a2f3f";
-ctx.shadowBlur = 15;
-ctx.shadowColor = "#000";
-ctx.fillRect(40,150,400,400);
+    ctx.fillStyle = "#2a2f3f";
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#000";
+    ctx.fillRect(40,150,400,400);
 
-ctx.fillStyle = "#fff";
-ctx.font = "bold 28px Arial";
-ctx.fillText(`Nível ${jogador.nivel} Guerreiro`, 60, 200);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 28px Arial";
+    ctx.fillText(`Nível ${jogador.nivel} Guerreiro`, 60, 200);
 
-ctx.font = "18px Arial";
-ctx.fillText(`❤️ HP: ${jogador.hp}/${jogador.maxHp}`, 60, 250);
-ctx.fillText(`✨ XP: ${jogador.xp}/${jogador.nivel*100}`, 60, 285);
-ctx.fillText(`🪙 Ouro: ${jogador.ouro}`, 60, 320);
-ctx.fillText(`⚔️ Dano: ${getDanoJogador()}`, 60, 355);
-ctx.fillText(`🛡️ Defesa: ${Math.floor(getDefesa())}`, 60, 390);
-ctx.fillText(`🏃 Velocidade: ${getVelocidade().toFixed(1)}`, 60, 425);
+    ctx.font = "18px Arial";
+    ctx.fillText(`❤️ HP: ${jogador.hp}/${jogador.maxHp}`, 60, 250);
+    ctx.fillText(`✨ XP: ${jogador.xp}/${jogador.nivel*100}`, 60, 285);
+    ctx.fillText(`🪙 Ouro: ${jogador.ouro}`, 60, 320);
+    ctx.fillText(`⚔️ Dano: ${getDanoJogador()}`, 60, 355);
+    ctx.fillText(`🛡️ Defesa: ${Math.floor(getDefesa())}`, 60, 390);
+    ctx.fillText(`🏃 Velocidade: ${getVelocidade().toFixed(1)}`, 60, 425);
 
-// Atributos
-ctx.fillStyle = "#3a3f4f";
-ctx.fillRect(260, 200, 150, 200);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 20px Arial";
-ctx.fillText("Atributos", 280, 230);
-ctx.font = "16px Arial";
-ctx.fillText(`💪 Força: ${jogador.atributos.forca}`, 280, 270);
-ctx.fillText(`⚡ Agilidade: ${jogador.atributos.agilidade}`, 280, 310);
-ctx.fillText(`💙 Constituição: ${jogador.atributos.constituicao}`, 280, 350);
+    // Atributos
+    ctx.fillStyle = "#3a3f4f";
+    ctx.fillRect(260, 200, 150, 200);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px Arial";
+    ctx.fillText("Atributos", 280, 230);
+    ctx.font = "16px Arial";
+    ctx.fillText(`💪 Força: ${jogador.atributos.forca}`, 280, 270);
+    ctx.fillText(`⚡ Agilidade: ${jogador.atributos.agilidade}`, 280, 310);
+    ctx.fillText(`💙 Constituição: ${jogador.atributos.constituicao}`, 280, 350);
 }
 
 function desenharAbaInventario(){
-ctx.fillStyle = "#2a2f3f";
-ctx.fillRect(40,150,1000,400);
+    ctx.fillStyle = "#2a2f3f";
+    ctx.fillRect(40,150,1000,400);
 
-// Abas do inventário
-let subAbas = ["Todos", "Armas", "Armaduras", "Acessórios"];
-for(let i=0; i<4; i++){
-    let x = 60 + i*120;
-    let sobre = mouse.x > x && mouse.x < x+100 && mouse.y > 160 && mouse.y < 190;
-    ctx.fillStyle = sobre ? "#4a9eff" : "#1a1f2a";
-    ctx.fillRect(x, 160, 100, 30);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px Arial";
-    ctx.fillText(subAbas[i], x+20, 182);
-    
-    if(mouse.clicado && sobre){
-        abasInventario = subAbas[i].toLowerCase();
+    // Abas do inventário
+    let subAbas = ["Todos", "Armas", "Armaduras", "Acessórios"];
+    for(let i=0; i<4; i++){
+        let x = 60 + i*120;
+        let sobre = mouse.x > x && mouse.x < x+100 && mouse.y > 160 && mouse.y < 190;
+        
+        // Destacar aba selecionada
+        if((abasInventario === "todos" && i === 0) ||
+           (abasInventario === "armas" && i === 1) ||
+           (abasInventario === "armaduras" && i === 2) ||
+           (abasInventario === "acessórios" && i === 3)) {
+            ctx.fillStyle = "#4a9eff";
+        } else {
+            ctx.fillStyle = sobre ? "#3a4f7f" : "#1a1f2a";
+        }
+        
+        ctx.fillRect(x, 160, 100, 30);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 14px Arial";
+        ctx.fillText(subAbas[i], x+20, 182);
+        
+        if(mouse.clicado && sobre){
+            abasInventario = subAbas[i].toLowerCase();
+            if(abasInventario === "acessórios") abasInventario = "acessórios";
+        }
     }
-}
 
-// Slots de equipamento
-ctx.fillStyle = "#1a1f2a";
-ctx.fillRect(60, 210, 400, 120);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.fillText("EQUIPADOS", 200, 200);
+    // Slots de equipamento
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(60, 210, 400, 120);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText("EQUIPADOS", 200, 200);
 
-let slots = ["Arma", "Armadura", "Acessório", "Acessório 2"];
-for(let s=0;s<4;s++){
-let x = 70 + s*100;
-ctx.fillStyle = s === slotSelecionado ? "#4a9eff" : "#333";
-ctx.fillRect(x,230,80,80);
-ctx.fillStyle = "#fff";
-ctx.font = "10px Arial";
-ctx.fillText(slots[s], x+20, 320);
+    let slots = ["Arma", "Armadura", "Acessório", "Acessório 2"];
+    for(let s=0;s<4;s++){
+        let x = 70 + s*100;
+        ctx.fillStyle = s === slotSelecionado ? "#4a9eff" : "#333";
+        ctx.fillRect(x,230,80,80);
+        ctx.fillStyle = "#fff";
+        ctx.font = "10px Arial";
+        ctx.fillText(slots[s], x+20, 320);
 
-if(jogador.equipamento[s]){
-ctx.fillStyle = coresRaridade[jogador.equipamento[s].raridade];
-ctx.font = "bold 10px Arial";
-ctx.fillText(jogador.equipamento[s].nome.substring(0,8), x+5, 315);
-ctx.fillText(`+${jogador.equipamento[s].poder}`, x+5, 330);
-}
-}
+        if(jogador.equipamento[s]){
+            ctx.fillStyle = coresRaridade[jogador.equipamento[s].raridade];
+            ctx.font = "bold 10px Arial";
+            ctx.fillText(jogador.equipamento[s].nome.substring(0,8), x+5, 315);
+            ctx.fillText(`+${jogador.equipamento[s].poder}`, x+5, 330);
+        }
+    }
 
-// Inventário
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.fillText("INVENTÁRIO", 70, 380);
+    // Inventário
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText("INVENTÁRIO", 70, 380);
 
-let itensFiltrados = jogador.inventario.filter(item => {
-    if(abasInventario === "todos") return true;
-    if(abasInventario === "armas") return item.tipo === "arma";
-    if(abasInventario === "armaduras") return item.tipo === "armadura";
-    if(abasInventario === "acessórios") return item.tipo === "acessorio";
-    return true;
-});
+    let itensFiltrados = jogador.inventario.filter(item => {
+        if(abasInventario === "todos") return true;
+        if(abasInventario === "armas") return item.tipo === "arma";
+        if(abasInventario === "armaduras") return item.tipo === "armadura";
+        if(abasInventario === "acessórios" || abasInventario === "acessórios") return item.tipo === "acessorio";
+        return true;
+    });
 
-itensFiltrados.slice(0,24).forEach((item,i)=>{
-let x = 70 + (i%8)*110;
-let y = 400 + Math.floor(i/8)*100;
+    itensFiltrados.slice(0,24).forEach((item,i)=>{
+        let x = 70 + (i%8)*110;
+        let y = 400 + Math.floor(i/8)*100;
 
-ctx.fillStyle = coresRaridade[item.raridade];
-ctx.fillRect(x,y,80,80);
+        ctx.fillStyle = coresRaridade[item.raridade];
+        ctx.fillRect(x,y,80,80);
 
-ctx.fillStyle = "#fff";
-ctx.font = "bold 10px Arial";
-ctx.fillText(item.nome.substring(0,10), x+5, y+95);
-ctx.fillText(`+${item.poder}`, x+5, y+110);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 10px Arial";
+        ctx.fillText(item.nome.substring(0,10), x+5, y+95);
+        ctx.fillText(`+${item.poder}`, x+5, y+110);
 
-// Efeito especial
-if(item.efeito){
-    ctx.fillStyle = item.efeito.cor;
-    ctx.beginPath();
-    ctx.arc(x+40, y+40, 10, 0, Math.PI*2);
-    ctx.fill();
-}
+        if(item.efeito){
+            ctx.fillStyle = item.efeito.cor;
+            ctx.beginPath();
+            ctx.arc(x+40, y+40, 10, 0, Math.PI*2);
+            ctx.fill();
+        }
 
-if(mouse.clicado && mouse.x > x && mouse.x < x+80 && mouse.y > y && mouse.y < y+80){
-equiparItem(jogador.inventario.indexOf(item));
-}
-});
+        if(mouse.clicado && mouse.x > x && mouse.x < x+80 && mouse.y > y && mouse.y < y+80){
+            equiparItem(jogador.inventario.indexOf(item));
+        }
+    });
 }
 
 function desenharSkillTree(){
-ctx.fillStyle = "#2a2f3f";
-ctx.fillRect(40,150,1000,400);
+    ctx.fillStyle = "#2a2f3f";
+    ctx.fillRect(40,150,1000,400);
 
-ctx.fillStyle = "#fff";
-ctx.font = "bold 28px Arial";
-ctx.fillText(`Árvore de Habilidades - Pontos: ${pontosSkill}`, 200, 200);
-
-// Sub-abas da skill tree
-let categorias = ["Combate", "Defesa", "Agilidade"];
-for(let i=0; i<3; i++){
-    let x = 200 + i*200;
-    let sobre = mouse.x > x && mouse.x < x+150 && mouse.y > 220 && mouse.y < 260;
-    ctx.fillStyle = sobre ? "#4a9eff" : "#1a1f2a";
-    ctx.fillRect(x, 220, 150, 40);
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 18px Arial";
-    ctx.fillText(categorias[i], x+30, 250);
-    
-    if(mouse.clicado && sobre){
-        abaSkillSelecionada = categorias[i].toLowerCase();
-    }
-}
+    ctx.font = "bold 28px Arial";
+    ctx.fillText(`Árvore de Habilidades - Pontos: ${pontosSkill}`, 200, 200);
 
-// Skills da categoria selecionada
-let skills = [];
-if(abaSkillSelecionada === "combate"){
-    skills = [
-        {nome: "Dano Físico", skill: "danoFisico", desc: "+2 de dano por nível"},
-        {nome: "Chance Crítico", skill: "critico", desc: "+2% crítico por nível"},
-        {nome: "Fúria", skill: "furia", desc: "+10% dano quando com HP baixo"}
-    ];
-} else if(abaSkillSelecionada === "defesa"){
-    skills = [
-        {nome: "Vida", skill: "vida", desc: "+10 de HP por nível"},
-        {nome: "Armadura", skill: "armadura", desc: "+2 de defesa por nível"},
-        {nome: "Regeneração", skill: "regeneracao", desc: "+1 HP/s por nível"}
-    ];
-} else if(abaSkillSelecionada === "agilidade"){
-    skills = [
-        {nome: "Velocidade", skill: "velocidade", desc: "+0.5 velocidade por nível"},
-        {nome: "Esquiva", skill: "esquiva", desc: "+2% esquiva por nível"},
-        {nome: "Dash", skill: "dash", desc: "Desbloqueia habilidade Dash"}
-    ];
-}
-
-skills.forEach((skillInfo, index) => {
-    let skill = jogador.skillTree[abaSkillSelecionada][skillInfo.skill];
-    let x = 200;
-    let y = 300 + index * 80;
-    
-    ctx.fillStyle = "#1a1f2a";
-    ctx.fillRect(x, y, 600, 70);
-    
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 18px Arial";
-    ctx.fillText(skillInfo.nome, x+20, y+25);
-    ctx.font = "12px Arial";
-    ctx.fillText(skillInfo.desc, x+20, y+45);
-    
-    // Barra de nível
-    for(let i=0; i<skill.max; i++){
-        let barX = x + 300 + i*40;
-        ctx.fillStyle = i < skill.nivel ? "#4aff4a" : "#555";
-        ctx.fillRect(barX, y+20, 30, 30);
-        if(i === 0){
-            ctx.fillStyle = "#fff";
-            ctx.font = "bold 14px Arial";
-            ctx.fillText(skill.nivel + "/" + skill.max, barX-60, y+45);
-        }
-    }
-    
-    // Botão de comprar
-    if(skill.nivel < skill.max && pontosSkill > 0){
-        let btnX = x + 500;
-        let btnSobre = mouse.x > btnX && mouse.x < btnX+80 && mouse.y > y && mouse.y < y+40;
-        ctx.fillStyle = btnSobre ? "#4a9eff" : "#4aff4a";
-        ctx.fillRect(btnX, y+10, 80, 30);
-        ctx.fillStyle = "#000";
-        ctx.font = "bold 14px Arial";
-        ctx.fillText("COMPRAR", btnX+5, y+32);
+    // Sub-abas da skill tree
+    let categorias = ["Combate", "Defesa", "Agilidade"];
+    for(let i=0; i<3; i++){
+        let x = 200 + i*200;
+        let sobre = mouse.x > x && mouse.x < x+150 && mouse.y > 220 && mouse.y < 260;
         
-        if(mouse.clicado && btnSobre){
-            comprarSkill(abaSkillSelecionada, skillInfo.skill);
+        // Destacar categoria selecionada
+        let categoriaNome = categorias[i].toLowerCase();
+        ctx.fillStyle = (abaSkillSelecionada === categoriaNome) ? "#4a9eff" : (sobre ? "#3a4f7f" : "#1a1f2a");
+        ctx.fillRect(x, 220, 150, 40);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px Arial";
+        ctx.fillText(categorias[i], x+30, 250);
+        
+        if(mouse.clicado && sobre){
+            abaSkillSelecionada = categoriaNome;
         }
     }
-});
+    let skills = [];
+    if(abaSkillSelecionada === "combate"){
+        skills = [
+            {nome: "Dano Físico", skill: "danoFisico", desc: "+2 de dano por nível"},
+            {nome: "Chance Crítico", skill: "critico", desc: "+2% crítico por nível"},
+            {nome: "Fúria", skill: "furia", desc: "+10% dano quando com HP baixo"}
+        ];
+    } else if(abaSkillSelecionada === "defesa"){
+        skills = [
+            {nome: "Vida", skill: "vida", desc: "+10 de HP por nível"},
+            {nome: "Armadura", skill: "armadura", desc: "+2 de defesa por nível"},
+            {nome: "Regeneração", skill: "regeneracao", desc: "+1 HP/s por nível"}
+        ];
+    } else if(abaSkillSelecionada === "agilidade"){
+        skills = [
+            {nome: "Velocidade", skill: "velocidade", desc: "+0.5 velocidade por nível"},
+            {nome: "Esquiva", skill: "esquiva", desc: "+2% esquiva por nível"},
+            {nome: "Dash", skill: "dash", desc: "Desbloqueia habilidade Dash"}
+        ];
+    }
+
+    skills.forEach((skillInfo, index) => {
+        let skill = jogador.skillTree[abaSkillSelecionada][skillInfo.skill];
+        let x = 200;
+        let y = 300 + index * 80;
+        
+        ctx.fillStyle = "#1a1f2a";
+        ctx.fillRect(x, y, 600, 70);
+        
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px Arial";
+        ctx.fillText(skillInfo.nome, x+20, y+25);
+        ctx.font = "12px Arial";
+        ctx.fillText(skillInfo.desc, x+20, y+45);
+        
+        // Barra de nível
+        for(let i=0; i<skill.max; i++){
+            let barX = x + 300 + i*40;
+            ctx.fillStyle = i < skill.nivel ? "#4aff4a" : "#555";
+            ctx.fillRect(barX, y+20, 30, 30);
+            if(i === 0){
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(skill.nivel + "/" + skill.max, barX-60, y+45);
+            }
+        }
+        
+        // Botão de comprar
+        if(skill.nivel < skill.max && pontosSkill > 0){
+            let btnX = x + 500;
+            let btnSobre = mouse.x > btnX && mouse.x < btnX+80 && mouse.y > y && mouse.y < y+40;
+            ctx.fillStyle = btnSobre ? "#4a9eff" : "#4aff4a";
+            ctx.fillRect(btnX, y+10, 80, 30);
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 14px Arial";
+            ctx.fillText("COMPRAR", btnX+5, y+32);
+            
+            if(mouse.clicado && btnSobre){
+                comprarSkill(abaSkillSelecionada, skillInfo.skill);
+            }
+        }
+    });
 }
 
 function desenharQuests(){
-ctx.fillStyle = "#2a2f3f";
-ctx.fillRect(40,150,1000,400);
+    ctx.fillStyle = "#2a2f3f";
+    ctx.fillRect(40,150,1000,400);
 
-ctx.fillStyle = "#fff";
-ctx.font = "bold 28px Arial";
-ctx.fillText("QUESTS ATIVAS", 400, 200);
-
-questsAtivas.forEach((q, index) => {
-    let y = 250 + index * 90;
-    
-    ctx.fillStyle = q.completada ? "#2a4a2a" : "#1a1f2a";
-    ctx.fillRect(100, y, 800, 70);
-    
-    ctx.fillStyle = q.completada ? "#aaffaa" : "#fff";
-    ctx.font = "bold 18px Arial";
-    ctx.fillText(q.nome, 120, y+25);
-    ctx.font = "14px Arial";
-    ctx.fillText(q.desc, 120, y+45);
-    
-    // Barra de progresso
-    ctx.fillStyle = "#333";
-    ctx.fillRect(500, y+20, 200, 20);
-    ctx.fillStyle = q.completada ? "#4aff4a" : "#ffaa00";
-    let progresso = (q.progresso / q.objetivo) * 200;
-    ctx.fillRect(500, y+20, Math.min(progresso, 200), 20);
-    
     ctx.fillStyle = "#fff";
-    ctx.fillText(`${q.progresso}/${q.objetivo}`, 710, y+38);
-    
-    if(q.completada){
-        ctx.fillStyle = "#ffd700";
-        ctx.font = "bold 16px Arial";
-        ctx.fillText("COMPLETA!", 800, y+38);
-    }
-});
+    ctx.font = "bold 28px Arial";
+    ctx.fillText("QUESTS ATIVAS", 400, 200);
+
+    questsAtivas.forEach((q, index) => {
+        let y = 250 + index * 90;
+        
+        ctx.fillStyle = q.completada ? "#2a4a2a" : "#1a1f2a";
+        ctx.fillRect(100, y, 800, 70);
+        
+        ctx.fillStyle = q.completada ? "#aaffaa" : "#fff";
+        ctx.font = "bold 18px Arial";
+        ctx.fillText(q.nome, 120, y+25);
+        ctx.font = "14px Arial";
+        ctx.fillText(q.desc, 120, y+45);
+        
+        // Barra de progresso
+        ctx.fillStyle = "#333";
+        ctx.fillRect(500, y+20, 200, 20);
+        ctx.fillStyle = q.completada ? "#4aff4a" : "#ffaa00";
+        let progresso = (q.progresso / q.objetivo) * 200;
+        ctx.fillRect(500, y+20, Math.min(progresso, 200), 20);
+        
+        ctx.fillStyle = "#fff";
+        ctx.fillText(`${q.progresso}/${q.objetivo}`, 710, y+38);
+        
+        if(q.completada){
+            ctx.fillStyle = "#ffd700";
+            ctx.font = "bold 16px Arial";
+            ctx.fillText("COMPLETA!", 800, y+38);
+        }
+    });
 }
+
 
 function desenharMasmorra(){
 if(!masmorraSelecionada) return;
