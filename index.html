@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>RPG Avançado - Skill Tree & Inventário</title>
+<title>RPG Teste</title>
 <style>
 body { 
 margin:0; 
@@ -1392,24 +1392,46 @@ ctx.lineTo(canvas.width+100,i);
 ctx.stroke();
 }
 
-slashes.forEach(s=>{
-let alpha = s.vida/s.vidaMax;
-ctx.save();
-ctx.translate(s.x, s.y);
-ctx.rotate(s.direcao);
-ctx.globalAlpha = alpha * 0.8;
-ctx.fillStyle = s.cor;
-ctx.shadowBlur = 20;
-ctx.shadowColor = s.cor;
+slashes.forEach(s => {
+    let alpha = s.vida / s.vidaMax;
+    let progresso = 1 - alpha; // 0 → 1
 
-ctx.beginPath();
-ctx.moveTo(0, -s.largura/2);
-ctx.quadraticCurveTo(s.comprimento/2, -s.largura/2 - 10, s.comprimento, -s.largura/2);
-ctx.lineTo(s.comprimento, s.largura/2);
-ctx.quadraticCurveTo(s.comprimento/2, s.largura/2 + 10, 0, s.largura/2);
-ctx.closePath();
-ctx.fill();
-ctx.restore();
+    ctx.save();
+    ctx.translate(s.x, s.y);
+
+    // Rotação dinâmica (faz o corte "varrer")
+    ctx.rotate(s.direcao + (progresso - 0.5) * 1.2);
+
+    ctx.globalAlpha = alpha * 0.9;
+
+    // 🔥 Glow
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = s.cor;
+
+    let raioInterno = 30 * (1 + progresso * 0.2);
+    let raioExterno = 70 * (1 + progresso * 0.2);
+    let abertura = Math.PI / 2.2;
+
+    // 🔥 Gradiente estilo metroidvania
+    let grad = ctx.createRadialGradient(0, 0, raioInterno, 0, 0, raioExterno);
+    grad.addColorStop(0, "white");
+    grad.addColorStop(0.4, s.cor);
+    grad.addColorStop(1, "transparent");
+
+    ctx.fillStyle = grad;
+
+    ctx.beginPath();
+
+    // Arco externo
+    ctx.arc(0, 0, raioExterno, -abertura / 2, abertura / 2);
+
+    // Arco interno (volta)
+    ctx.arc(0, 0, raioInterno, abertura / 2, -abertura / 2, true);
+
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
 });
 
 projetesis.forEach(p=>{
