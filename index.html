@@ -318,6 +318,100 @@ questsAtivas.forEach(q => {
 });
 }
 
+// ================= MASMORRAS =================
+const masmorras = [
+{
+nome: "Floresta Sombria",
+descricao: "Uma floresta cheia de criaturas noturnas",
+dificuldade: 1,
+icon: "🌲",
+cor: "#2a6f2a",
+corFundo: "#1a3f1a",
+inimigosBase: 5,
+efeitoAmbiente: "sombrio",
+chefe: {
+    nome: "Rei dos Lobos",
+    cor: "#8b4513",
+    hpBonus: 1.2,
+    danoBonus: 1.1,
+    fala: ["Você não passará!", "Matilha, ataquem!"],
+    ataques: ["investida", "espinhos"]
+}
+},
+{
+nome: "Caverna de Gelo",
+descricao: "Caverna congelante com criaturas de gelo",
+dificuldade: 2,
+icon: "❄️",
+cor: "#44aaff",
+corFundo: "#2a4f8a",
+inimigosBase: 7,
+efeitoAmbiente: "gelo",
+chefe: {
+    nome: "Yeti",
+    cor: "#aaddff",
+    hpBonus: 1.5,
+    danoBonus: 1.3,
+    fala: ["Grrrr!", "Sinta o poder do gelo!"],
+    ataques: ["investida", "nevasca", "projetil"]
+}
+},
+{
+nome: "Vulcão Ardente",
+descricao: "Montanha de fogo com criaturas de lava",
+dificuldade: 3,
+icon: "🌋",
+cor: "#ff6600",
+corFundo: "#4a1f1f",
+inimigosBase: 8,
+efeitoAmbiente: "fogo",
+chefe: {
+    nome: "Dragão de Lava",
+    cor: "#ff4400",
+    hpBonus: 1.8,
+    danoBonus: 1.6,
+    fala: ["QUEIMEM!", "Sua alma vai arder!"],
+    ataques: ["bola de fogo", "meteoro", "explosão"]
+}
+},
+{
+nome: "Templo do Trovão",
+descricao: "Ruínas antigas com magia de trovão",
+dificuldade: 4,
+icon: "⚡",
+cor: "#ffff00",
+corFundo: "#2a2a4a",
+inimigosBase: 10,
+efeitoAmbiente: "trovão",
+chefe: {
+    nome: "Deus do Trovão",
+    cor: "#ffff44",
+    hpBonus: 2.0,
+    danoBonus: 1.9,
+    fala: ["Sinta a fúria dos deuses!", "TROVÃO!"],
+    ataques: ["relâmpago", "projetil", "investida"]
+}
+},
+{
+nome: "Abismo do Caos",
+descricao: "Lugar de loucura e criaturas caóticas",
+dificuldade: 5,
+icon: "🌀",
+cor: "#aa44ff",
+corFundo: "#2a1f3f",
+inimigosBase: 12,
+efeitoAmbiente: "caos",
+chefe: {
+    nome: "Senhor do Caos",
+    cor: "#ff55ff",
+    hpBonus: 2.5,
+    danoBonus: 2.2,
+    fala: ["CAOS!", "A ordem é ilusão!"],
+    ataques: ["meteoro", "relâmpago", "nevasca", "explosão"]
+}
+}
+];
+
 // ================= INICIAR MASMORRA =================
 function iniciarMasmorra(m){
 masmorraSelecionada=m;
@@ -400,7 +494,7 @@ Object.keys(jogador.habilidades).forEach(h => {
 });
 if(mensagemTemporaria.tempo>0) mensagemTemporaria.tempo--;
 
-atualizarParticulas();
+atualizarParticulas(); // Nome corrigido (agora corresponde à função definida)
 atualizarSlashes();
 atualizarNumeros();
 
@@ -417,6 +511,56 @@ estado = "lobby";
 tremorTela = 0;
 canvas.style.background = "#0a0f1a";
 criarMensagem("Você morreu...", "#ff0000");
+}
+}
+
+// Função atualizarParticulas (corrigida)
+function atualizarParticulas(){
+for(let i=particulas.length-1; i>=0; i--){
+    let p = particulas[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vida--;
+    if(p.vida <= 0){
+        particulas.splice(i,1);
+    }
+}
+}
+
+function atualizarSlashes(){
+for(let i=slashes.length-1; i>=0; i--){
+    slashes[i].vida--;
+    if(slashes[i].vida <= 0){
+        slashes.splice(i,1);
+    }
+}
+}
+
+function atualizarNumeros(){
+for(let i=numerosFlutuantes.length-1; i>=0; i--){
+    let n = numerosFlutuantes[i];
+    n.x += n.vx;
+    n.y += n.vy;
+    n.vida--;
+    if(n.vida <= 0){
+        numerosFlutuantes.splice(i,1);
+    }
+}
+}
+
+function atualizarEfeitoMasmorra(){
+if(efeitoMasmorra === "fogo" && tempoJogo % 60 === 0){
+    if(Math.random() < 0.1){
+        criarParticula(jogador.x + aleatorio(-50,50), jogador.y + aleatorio(-50,50), "#ff6600", 5);
+    }
+} else if(efeitoMasmorra === "gelo" && tempoJogo % 30 === 0){
+    if(Math.random() < 0.05){
+        jogador.velocidade = Math.max(2, jogador.velocidade * 0.95);
+    }
+} else if(efeitoMasmorra === "trovão" && tempoJogo % 120 === 0){
+    if(Math.random() < 0.2){
+        tremorTela = 10;
+    }
 }
 }
 
