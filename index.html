@@ -2,1450 +2,788 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>RPG Avançado - Skill Tree & Inventário</title>
+<title>RPG Avançado - Versão Funcional</title>
 <style>
 body { 
 margin:0; 
 overflow:hidden; 
 background:#111; 
-font-family:'Segoe UI', Arial, sans-serif; 
+font-family:Arial, sans-serif; 
 }
 canvas { 
 display:block; 
 margin:auto; 
-box-shadow: 0 0 30px rgba(0,0,0,0.8);
-cursor: crosshair;
+background: #1a1f2a;
+border: 2px solid #333;
 }
 </style>
 </head>
 <body>
-<canvas id="game"></canvas>
+<canvas id="game" width="1100" height="650"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-canvas.width = 1100;
-canvas.height = 650;
 
 // ================= ESTADO DO JOGO =================
 let estado = "lobby";
-let teclas = {}, mouse = {x:0, y:0, clicado:false, direitoClicado:false};
+let teclas = {};
+let mouse = {x: 0, y: 0, clicado: false};
 let particulas = [];
 let numerosFlutuantes = [];
-let projetesis = [];
-let slashes = [];
-let tempoJogo = 0;
+let inimigos = [];
+let chefe = null;
 let masmorraSelecionada = null;
-let inimigos = [], chefe = null;
-let masmorraLimpa = false;
-let camera = {x:0, y:0};
-let tremorTela = 0;
-let mensagemTemporaria = {texto:"", tempo:0};
-let slotSelecionado = 0;
-let abaInventario = "todos"; // todos, armas, armaduras, amuletos, aneis
-let skillPoints = 0;
-let quests = [];
-let mensagemQuest = {texto:"", tempo:0};
-
-// Input
-window.addEventListener("keydown",e=>teclas[e.key]=true);
-window.addEventListener("keyup",e=>teclas[e.key]=false);
-canvas.addEventListener("mousemove",e=>{
-let r=canvas.getBoundingClientRect();
-mouse.x=e.clientX-r.left;
-mouse.y=e.clientY-r.top;
-});
-canvas.addEventListener("mousedown",(e)=>{
-if(e.button===0) mouse.clicado=true;
-if(e.button===2) mouse.direitoClicado=true;
-});
-canvas.addEventListener("mouseup",(e)=>{
-if(e.button===0) mouse.clicado=false;
-if(e.button===2) mouse.direitoClicado=false;
-});
-canvas.addEventListener("contextmenu",e=>e.preventDefault());
-
-// ================= CORES E RARIDADES =================
-const coresRaridade={
-comum:"#a0a0a0",
-raro:"#4a9eff",
-epico:"#b87cff",
-lendario:"#ffaa33",
-mitico:"#ff5555"
-};
-
-const multiplicadorRaridade={
-comum:1,
-raro:1.5,
-epico:2,
-lendario:3,
-mitico:5
-};
-
-const tamanhoSlash = {
-comum: 1.0,
-raro: 1.2,
-epico: 1.4,
-lendario: 1.7,
-mitico: 2.0
-};
-
-// ================= EFEITOS ESPECIAIS DOS ITENS =================
-const efeitosEspeciais = [
-{ nome: "Flamante", cor: "#ff5500", danoBonus: 5, desc: "+5 de dano e chance de queimar" },
-{ nome: "Gélido", cor: "#00ccff", defBonus: 3, desc: "+3 de defesa e lentidão nos inimigos" },
-{ nome: "Vampírico", cor: "#aa0000", vidaBonus: 10, desc: "Cura 10% do dano causado" },
-{ nome: "Celestial", cor: "#ffffaa", xpBonus: 20, desc: "+20% de XP ganho" },
-{ nome: "Trovejante", cor: "#ffaa00", velocidadeBonus: 2, desc: "+2 de velocidade e chance de crítico" },
-{ nome: "Sombrio", cor: "#6600aa", forcaBonus: 3, desc: "+3 de força" },
-{ nome: "Sagrado", cor: "#ffffff", constituicaoBonus: 3, desc: "+3 de constituição" },
-{ nome: "Ágil", cor: "#00aa00", agilidadeBonus: 3, desc: "+3 de agilidade" }
-];
-
-// ================= SKILL TREE =================
-const skillTree = {
-forca: { nivel: 0, max: 5, custo: 1, bonus: 2, desc: "+2 de dano por nível" },
-agilidade: { nivel: 0, max: 5, custo: 1, bonus: 2, desc: "+2% de crítico por nível" },
-constituicao: { nivel: 0, max: 5, custo: 1, bonus: 5, desc: "+5 de HP por nível" },
-velocidade: { nivel: 0, max: 5, custo: 1, bonus: 0.5, desc: "+0.5 de velocidade por nível" },
-danoCritico: { nivel: 0, max: 3, custo: 2, bonus: 0.5, desc: "+50% de dano crítico por nível" },
-vidaRegen: { nivel: 0, max: 3, custo: 2, bonus: 1, desc: "+1 de HP regenerado por segundo" },
-dash: { nivel: 0, max: 1, custo: 5, desbloqueado: false, desc: "DESBLOQUEIA DASH (Quest)" },
-duploSlash: { nivel: 0, max: 1, custo: 5, desbloqueado: false, desc: "Ataque duplo" }
-};
-
-// ================= QUESTS =================
-const questsDisponiveis = [
-{ 
-nome: "Aprendiz de Guerreiro", 
-desc: "Mate 10 inimigos", 
-progresso: 0, 
-meta: 10,
-recompensaXP: 50,
-recompensaSkill: "dash",
-completa: false,
-tipo: "matar"
-},
-{ 
-nome: "Caçador de Chefes", 
-desc: "Derrote 1 chefe", 
-progresso: 0, 
-meta: 1,
-recompensaXP: 100,
-recompensaOuro: 200,
-completa: false,
-tipo: "chefe"
-},
-{ 
-nome: "Colecionador", 
-desc: "Obtenha 5 itens", 
-progresso: 0, 
-meta: 5,
-recompensaXP: 75,
-recompensaSkill: "duploSlash",
-completa: false,
-tipo: "itens"
-}
-];
+let mensagem = "";
+let tempoMensagem = 0;
 
 // ================= JOGADOR =================
-const jogador={
-x:550,y:500,
-hp:100,
-maxHp:100,
-xp:0,
-nivel:1,
-ouro:0,
-velocidade:5,
-danoBase:15,
-defesaBase:3,
-iframe:0,
-slashCooldown:0,
-direcao:0,
-animacao:0,
-inventario:[],
-equipamento:[null,null,null,null], // 0-arma, 1-armadura, 2-amuleto, 3-anel
-pocoes:5,
-pocaoCooldown:0,
-habilidades:{
-dash:{desbloqueada:false,cooldown:0},
-duploSlash:{desbloqueada:false,cooldown:0}
-},
-estatisticas:{
-inimigosMortos:0,
-chefesDerrotados:0,
-danoCausado:0,
-maiorDano:0,
-masmorrasCompletadas:0,
-itensColetados:0
-},
-atributos:{
-forca:5,
-agilidade:5,
-constituicao:5
-},
-efeitos:[],
-regenTimer:0
+let jogador = {
+    x: 550,
+    y: 500,
+    hp: 100,
+    maxHp: 100,
+    xp: 0,
+    nivel: 1,
+    ouro: 100,
+    velocidade: 5,
+    dano: 15,
+    defesa: 3,
+    iframe: 0,
+    slashCooldown: 0,
+    direcao: 0,
+    animacao: 0,
+    pocoes: 3,
+    inventario: [],
+    equipamento: [null, null, null, null], // arma, armadura, amuleto, anel
+    forca: 5,
+    agilidade: 5,
+    constituicao: 5,
+    habilidades: {
+        dash: false,
+        dashCooldown: 0
+    }
 };
+
+// ================= SKILL TREE =================
+let skillTree = {
+    forca: { nivel: 0, max: 5, desc: "+2 de dano" },
+    agilidade: { nivel: 0, max: 5, desc: "+2% de crítico" },
+    constituicao: { nivel: 0, max: 5, desc: "+5 de HP" },
+    velocidade: { nivel: 0, max: 5, desc: "+0.5 de velocidade" }
+};
+let skillPoints = 0;
+
+// ================= QUESTS =================
+let quests = [
+    { nome: "Aprendiz", desc: "Mate 5 inimigos", progresso: 0, meta: 5, completa: false, recompensa: "dash" },
+    { nome: "Caçador", desc: "Derrote 1 chefe", progresso: 0, meta: 1, completa: false, recompensa: "ouro" }
+];
 
 // ================= MASMORRAS =================
-const masmorras = [
-{
-nome:"🌿 Caverna Verde",
-dificuldade:1,
-icon:"🌿",
-corFundo:"#1a3a1a",
-cor:"#4caf50",
-descricao:"Inimigos fracos, bom para começar",
-inimigosBase:4,
-chefe: {
-nome:"Guardião da Floresta",
-cor:"#2e7d32",
-fala:["As flores... protejam...", "A natureza é implacável!"],
-ataques:["investida", "espinhos"],
-hpBonus:1,
-danoBonus:1
-}
-},
-{
-nome:"🌑 Templo Sombrio",
-dificuldade:2,
-icon:"🌑",
-corFundo:"#1a1a2a",
-cor:"#9c27b0",
-descricao:"Armadilhas e esqueletos",
-inimigosBase:6,
-chefe: {
-nome:"Lich das Trevas",
-cor:"#6a1b9a",
-fala:["Sua alma será minha!", "A escuridão me fortalece..."],
-ataques:["bola de fogo", "invocar esqueletos"],
-hpBonus:1.2,
-danoBonus:1.2
-}
-},
-{
-nome:"🔥 Abismo Infernal",
-dificuldade:3,
-icon:"🔥",
-corFundo:"#3a1a1a",
-cor:"#f44336",
-descricao:"Lava e demônios",
-inimigosBase:8,
-chefe: {
-nome:"Demônio Infernal",
-cor:"#b71c1c",
-fala:["QUEIME!", "O inferno te aguarda!"],
-ataques:["explosão", "rajada de fogo", "meteoro"],
-hpBonus:1.5,
-danoBonus:1.5
-}
-},
-{
-nome:"❄️ Pico Gelado",
-dificuldade:4,
-icon:"❄️",
-corFundo:"#1a3a4a",
-cor:"#00bcd4",
-descricao:"Gelo e ventos congelantes",
-inimigosBase:10,
-chefe: {
-nome:"Dragão de Gelo",
-cor:"#00acc1",
-fala:["Sinta o gelo eterno!", "Você vai congelar!"],
-ataques:["sopro de gelo", "estalactites", "nevasca"],
-hpBonus:1.8,
-danoBonus:1.8
-}
-},
-{
-nome:"⚡ Torre da Tempestade",
-dificuldade:5,
-icon:"⚡",
-corFundo:"#2a1a3a",
-cor:"#ffc107",
-descricao:"Raio e trovões",
-inimigosBase:12,
-chefe: {
-nome:"Titã da Tempestade",
-cor:"#ffb300",
-fala:["O trovão me obedece!", "SIENTA A FÚRIA DOS CÉUS!"],
-ataques:["relâmpago", "tempestade", "teletransporte"],
-hpBonus:2.2,
-danoBonus:2.2
-}
-}
+let masmorras = [
+    { nome: "🌿 Caverna Verde", dificuldade: 1, cor: "#4caf50", inimigos: 3 },
+    { nome: "🌑 Templo Sombrio", dificuldade: 2, cor: "#9c27b0", inimigos: 5 },
+    { nome: "🔥 Abismo Infernal", dificuldade: 3, cor: "#f44336", inimigos: 7 },
+    { nome: "❄️ Pico Gelado", dificuldade: 4, cor: "#00bcd4", inimigos: 9 },
+    { nome: "⚡ Torre da Tempestade", dificuldade: 5, cor: "#ffc107", inimigos: 12 }
 ];
 
-// ================= HELPERS =================
-function aleatorio(min,max){return Math.random()*(max-min)+min;}
-function aleatorioInt(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
-function distancia(x1,y1,x2,y2){return Math.hypot(x1-x2,y1-y2);}
+// ================= EFEITOS DOS ITENS =================
+let efeitosItens = [
+    { nome: "Flamante", cor: "#ff5500", bonus: 5, tipo: "dano" },
+    { nome: "Gélido", cor: "#00ccff", bonus: 3, tipo: "defesa" },
+    { nome: "Vampírico", cor: "#aa0000", bonus: 10, tipo: "vida" },
+    { nome: "Celestial", cor: "#ffffaa", bonus: 20, tipo: "xp" }
+];
 
-function getDefesa(){
-let armaduraDef = jogador.equipamento[1] ? jogador.equipamento[1].poder : 0;
-let amuletoDef = jogador.equipamento[2] && jogador.equipamento[2].defBonus ? jogador.equipamento[2].defBonus : 0;
-return jogador.defesaBase + armaduraDef + amuletoDef + (jogador.atributos.constituicao * 0.5) + (skillTree.constituicao.nivel * 5);
-}
-
-function getArmaEquipada(){
-return jogador.equipamento[0];
-}
-
-function getCorArma(){
-let arma = getArmaEquipada();
-if(arma) return arma.corEfeito || coresRaridade[arma.raridade];
-return "#ffffff";
-}
-
-function getTamanhoSlash(){
-let arma = getArmaEquipada();
-if(arma) return tamanhoSlash[arma.raridade] || 1.0;
-return 1.0;
-}
-
-function calcularDanoRecebido(dano){
-let reduzido = dano - (getDefesa() * 0.5);
-let final = Math.max(1, Math.floor(reduzido * aleatorio(0.9,1.1)));
-return final;
-}
-
-function getDanoJogador(){
-let base = jogador.danoBase + (jogador.nivel * 3) + (jogador.atributos.forca * 2) + (skillTree.forca.nivel * 2);
-let arma = getArmaEquipada();
-if(arma) base += arma.poder;
-if(arma && arma.danoBonus) base += arma.danoBonus;
-
-let chanceCritico = 0.1 + (jogador.atributos.agilidade * 0.01) + (skillTree.agilidade.nivel * 0.02);
-let multiplicadorCritico = 2 + (skillTree.danoCritico.nivel * 0.5);
-
-if(Math.random() < chanceCritico){
-criarMensagem("CRÍTICO!", "#ffaa00");
-return Math.floor(base * multiplicadorCritico);
-}
-return Math.floor(base * aleatorio(0.9,1.1));
-}
-
-function getVelocidade(){
-return jogador.velocidade + (skillTree.velocidade.nivel * 0.5);
-}
-
-// ================= GERAR ITEM COM EFEITO =================
-function gerarItemComEfeito(tipo, raridade, nivelDungeon){
-let poderBase = tipo === "arma" ? aleatorioInt(8,20) : aleatorioInt(5,15);
-let poder = Math.floor(poderBase * multiplicadorRaridade[raridade] * (1 + nivelDungeon*0.1));
-
-let item = {
-tipo,
-poder,
-raridade,
-nome: gerarNomeItem(tipo, raridade),
-efeito: null
+// ================= RARIDADES =================
+let raridades = {
+    comum: { cor: "#a0a0a0", mult: 1 },
+    raro: { cor: "#4a9eff", mult: 1.5 },
+    epico: { cor: "#b87cff", mult: 2 },
+    lendario: { cor: "#ffaa33", mult: 3 }
 };
 
-// 30% de chance de ter efeito especial
-if(Math.random() < 0.3){
-let efeito = efeitosEspeciais[Math.floor(Math.random() * efeitosEspeciais.length)];
-item.efeito = efeito.nome;
-item.corEfeito = efeito.cor;
-item.descEfeito = efeito.desc;
-item.danoBonus = efeito.danoBonus || 0;
-item.defBonus = efeito.defBonus || 0;
-item.vidaBonus = efeito.vidaBonus || 0;
-item.xpBonus = efeito.xpBonus || 0;
-item.velocidadeBonus = efeito.velocidadeBonus || 0;
-item.forcaBonus = efeito.forcaBonus || 0;
-item.agilidadeBonus = efeito.agilidadeBonus || 0;
-item.constituicaoBonus = efeito.constituicaoBonus || 0;
+// ================= EVENTOS =================
+window.addEventListener("keydown", (e) => teclas[e.key] = true);
+window.addEventListener("keyup", (e) => teclas[e.key] = false);
 
-item.nome = `${efeito.nome} ${item.nome}`;
-}
-
-return item;
-}
-
-function gerarNomeItem(tipo, raridade){
-let prefixos = {comum:"",raro:"Refinado",epico:"Épica",lendario:"Lendária",mitico:"Mítica"};
-let armas = ["Espada","Machado","Adaga","Arco","Cajado","Martelo","Lança","Foice","Katana"];
-let armaduras = ["Escudo","Elmo","Peitoral","Botas","Luvas","Colar","Cinto","Manto","Armadura"];
-let amuletos = ["Amuleto","Pingente","Talismã","Cristal","Runas","Ídolo"];
-let aneis = ["Anel","Anel de Ouro","Anel de Prata","Anel de Rubi","Anel de Safira"];
-
-let lista;
-if(tipo === "arma") lista = armas;
-else if(tipo === "armadura") lista = armaduras;
-else if(tipo === "amuleto") lista = amuletos;
-else lista = aneis;
-
-return `${prefixos[raridade]} ${lista[Math.floor(Math.random()*lista.length)]}`;
-}
-
-// ================= SISTEMA DE PARTÍCULAS =================
-function criarParticula(x,y,cor,tamanho=3,velocidade={x:0,y:0},vida=30){
-for(let i=0;i<3;i++){
-particulas.push({
-x:x + (Math.random()-0.5)*10,
-y:y + (Math.random()-0.5)*10,
-cor,
-tamanho:tamanho * aleatorio(0.5,1.5),
-vx:velocidade.x + (Math.random()-0.5)*3,
-vy:velocidade.y + (Math.random()-0.5)*3,
-vida:vida + aleatorioInt(-5,5),
-vidaMax:vida,
-});
-}
-}
-
-function criarSlash(x,y,direcao,cor,tamanho=1.0){
-let comprimento = 70 * tamanho;
-let largura = 40 * tamanho;
-slashes.push({
-x: x + Math.cos(direcao) * 35,
-y: y + Math.sin(direcao) * 35,
-direcao: direcao,
-comprimento: comprimento,
-largura: largura,
-cor: cor,
-vida: 8,
-vidaMax: 8
-});
-}
-
-function criarNumeroFlutuante(x,y,texto,cor="#fff",tamanho=20){
-numerosFlutuantes.push({
-x,y,texto,cor,
-vida:60,
-vx:(Math.random()-0.5)*0.8,
-vy:-1.8,
-tamanho
-});
-}
-
-function criarMensagem(texto,cor="#fff"){
-mensagemTemporaria = {texto, cor, tempo:120};
-}
-
-function criarMensagemQuest(texto,cor="#ffaa00"){
-mensagemQuest = {texto, cor, tempo:180};
-}
-
-// ================= SKILL TREE =================
-function comprarSkill(skill){
-if(skill === "dash"){
-if(jogador.ouro >= 500 && !jogador.habilidades.dash.desbloqueada){
-jogador.ouro -= 500;
-jogador.habilidades.dash.desbloqueada = true;
-skillTree.dash.desbloqueado = true;
-criarMensagem("DASH DESBLOQUEADO!", "#00ffff");
-}
-return;
-}
-
-if(skill === "duploSlash"){
-if(jogador.ouro >= 1000 && !jogador.habilidades.duploSlash.desbloqueada){
-jogador.ouro -= 1000;
-jogador.habilidades.duploSlash.desbloqueada = true;
-skillTree.duploSlash.desbloqueado = true;
-criarMensagem("DUPLO ATAQUE!", "#ffaa00");
-}
-return;
-}
-
-if(skillPoints <= 0) return;
-let s = skillTree[skill];
-if(s.nivel < s.max){
-s.nivel++;
-skillPoints--;
-jogador.atributos[skill] = (jogador.atributos[skill] || 0) + s.bonus;
-criarMensagem(`${skill} aumentado!`, "#4aff4a");
-}
-}
-
-// ================= QUESTS =================
-function atualizarQuests(tipo, quantidade=1){
-questsDisponiveis.forEach(q => {
-if(!q.completa && q.tipo === tipo){
-q.progresso += quantidade;
-if(q.progresso >= q.meta){
-q.completa = true;
-jogador.xp += q.recompensaXP;
-if(q.recompensaOuro) jogador.ouro += q.recompensaOuro;
-criarMensagemQuest(`QUEST COMPLETA: ${q.nome}!`, "#ffd700");
-
-if(q.recompensaSkill === "dash"){
-jogador.habilidades.dash.desbloqueada = true;
-skillTree.dash.desbloqueado = true;
-criarMensagem("HABILIDADE DASH DESBLOQUEADA!", "#00ffff");
-}
-if(q.recompensaSkill === "duploSlash"){
-jogador.habilidades.duploSlash.desbloqueada = true;
-skillTree.duploSlash.desbloqueado = true;
-criarMensagem("HABILIDADE DUPLO ATAQUE!", "#ffaa00");
-}
-}
-}
-});
-}
-
-// ================= INICIAR MASMORRA =================
-function iniciarMasmorra(m){
-masmorraSelecionada=m;
-estado="dungeon";
-inimigos=[];
-chefe=null;
-masmorraLimpa=false;
-tremorTela=0;
-
-canvas.style.background = m.corFundo;
-
-jogador.x = canvas.width/2;
-jogador.y = canvas.height/2;
-camera.x = 0;
-camera.y = 0;
-
-for(let i=0;i<m.inimigosBase;i++){
-let tipo = Math.random()>0.7 ? "atirar" : "corpo";
-let hpInimigo = 20 * m.dificuldade * (m.chefe.hpBonus || 1);
-let danoInimigo = 5 * m.dificuldade * (m.chefe.danoBonus || 1);
-
-inimigos.push({
-x:aleatorio(150,950),
-y:aleatorio(100,500),
-hp:hpInimigo,
-hpMax:hpInimigo,
-dano:danoInimigo,
-tipo:tipo,
-velocidade: tipo==="corpo"?2:1.2,
-cooldown:aleatorioInt(40,80),
-cooldownAtual:0,
-animacao:0,
-cor: m.cor,
-tema: m.nome,
-recompensaXp:10 * m.dificuldade
-});
-}
-
-if(m.dificuldade >= 3){
-inimigos.push({
-x:aleatorio(400,700),
-y:aleatorio(150,350),
-hp:120 * m.dificuldade,
-hpMax:120 * m.dificuldade,
-dano:10 * m.dificuldade,
-tipo:"elite",
-velocidade:1.5,
-animacao:0,
-cor: m.chefe.cor,
-tema: m.nome,
-recompensaXp:30 * m.dificuldade
-});
-}
-
-criarMensagem(`Entrou em ${m.nome}`, m.cor);
-}
-
-// ================= CRIAR CHEFE =================
-function criarChefe(){
-if(!masmorraSelecionada) return;
-
-let m = masmorraSelecionada;
-chefe={
-nome: m.chefe.nome,
-x:aleatorio(400,700),
-y:aleatorio(150,300),
-hp:Math.floor(400 * m.dificuldade * m.chefe.hpBonus),
-hpMax:Math.floor(400 * m.dificuldade * m.chefe.hpBonus),
-dano:Math.floor(18 * m.dificuldade * m.chefe.danoBonus),
-cooldownDash:100,
-fase:1,
-cooldownAtaque:0,
-enfurecido:false,
-cor: m.chefe.cor,
-fala: m.chefe.fala,
-ataques: m.chefe.ataques,
-ultimoAtaque: 0,
-padraoAtaque: 0
-};
-
-for(let i=0;i<10;i++){
-criarParticula(chefe.x,chefe.y,chefe.cor,20,{x:aleatorio(-2,2),y:aleatorio(-2,2)},40);
-}
-criarMensagem(`⚔️ ${chefe.nome} APARECEU! ⚔️`, chefe.cor);
-}
-
-// ================= ATUALIZAR =================
-function atualizar(){
-tempoJogo++;
-
-if(estado==="dungeon"){
-camera.x += (jogador.x - canvas.width/2 - camera.x) * 0.1;
-camera.y += (jogador.y - canvas.height/2 - camera.y) * 0.1;
-
-atualizarJogador();
-atualizarInimigos();
-atualizarChefe();
-atualizarProjeteis();
-}
-
-// Cooldowns
-if(jogador.iframe>0) jogador.iframe--;
-if(jogador.slashCooldown>0) jogador.slashCooldown--;
-if(jogador.pocaoCooldown>0) jogador.pocaoCooldown--;
-if(jogador.habilidades.dash.cooldown>0) jogador.habilidades.dash.cooldown--;
-if(jogador.habilidades.duploSlash.cooldown>0) jogador.habilidades.duploSlash.cooldown--;
-if(mensagemTemporaria.tempo>0) mensagemTemporaria.tempo--;
-if(mensagemQuest.tempo>0) mensagemQuest.tempo--;
-
-// Regen de vida
-jogador.regenTimer++;
-if(jogador.regenTimer >= 60 && skillTree.vidaRegen.nivel > 0){
-jogador.hp = Math.min(jogador.maxHp, jogador.hp + skillTree.vidaRegen.nivel);
-jogador.regenTimer = 0;
-}
-
-atualizarParticulas();
-atualizarSlashes();
-atualizarNumeros();
-
-if(tremorTela > 0) tremorTela--;
-
-if(jogador.hp <= 0){
-jogador.hp = jogador.maxHp;
-jogador.x = 550;
-jogador.y = 500;
-estado = "lobby";
-tremorTela = 0;
-canvas.style.background = "#0a0f1a";
-criarMensagem("Você morreu...", "#ff0000");
-}
-}
-
-// ================= JOGADOR =================
-function atualizarJogador(){
-let dx=0,dy=0;
-let velocidadeAtual = getVelocidade();
-
-if(teclas["w"]||teclas["ArrowUp"])dy--;
-if(teclas["s"]||teclas["ArrowDown"])dy++;
-if(teclas["a"]||teclas["ArrowLeft"])dx--;
-if(teclas["d"]||teclas["ArrowRight"])dx++;
-
-if(dx||dy){
-let len=Math.hypot(dx,dy);
-dx/=len; dy/=len;
-jogador.x+=dx*velocidadeAtual;
-jogador.y+=dy*velocidadeAtual;
-jogador.direcao=Math.atan2(dy,dx);
-jogador.animacao+=0.2;
-
-if(tempoJogo % 5 === 0){
-criarParticula(jogador.x, jogador.y, "#aaa", 2, 
-{x:-dx*1, y:-dy*1}, 8);
-}
-}
-
-jogador.x = Math.max(50, Math.min(1050, jogador.x));
-jogador.y = Math.max(50, Math.min(600, jogador.y));
-
-if(teclas[" "]) atacar();
-if(teclas["q"] && jogador.pocoes>0 && jogador.pocaoCooldown===0) usarPocao();
-if(teclas["Shift"] && jogador.habilidades.dash.desbloqueada && jogador.habilidades.dash.cooldown===0) usarDash(dx,dy);
-if(teclas["1"]) slotSelecionado = 0;
-if(teclas["2"]) slotSelecionado = 1;
-if(teclas["3"]) slotSelecionado = 2;
-if(teclas["4"]) slotSelecionado = 3;
-}
-
-function atacar(){
-if(jogador.slashCooldown>0) return;
-jogador.slashCooldown = 15;
-
-let dano = getDanoJogador();
-let corArma = getCorArma();
-let tamanho = getTamanhoSlash();
-let acertou = false;
-
-criarSlash(jogador.x, jogador.y, jogador.direcao, corArma, tamanho);
-
-// Duplo ataque se desbloqueado
-let ataques = 1;
-if(jogador.habilidades.duploSlash.desbloqueada && Math.random()<0.3){
-ataques = 2;
-criarSlash(jogador.x - Math.cos(jogador.direcao)*30, jogador.y - Math.sin(jogador.direcao)*30, jogador.direcao + 0.2, corArma, tamanho*0.8);
-}
-
-for(let a=0;a<ataques;a++){
-for(let i=0;i<8;i++){
-let ang = jogador.direcao + (Math.random()-0.5)*1.2 + (a*0.2);
-criarParticula(
-jogador.x + Math.cos(ang)*50,
-jogador.y + Math.sin(ang)*50,
-corArma,
-5 * tamanho,
-{x:Math.cos(ang)*6, y:Math.sin(ang)*6},
-10
-);
-}
-}
-
-inimigos.forEach(i=>{
-if(distancia(jogador.x,jogador.y,i.x,i.y) < 90 + (15*tamanho)){
-i.hp -= dano * (ataques===2?0.7:1);
-jogador.estatisticas.danoCausado += dano;
-jogador.estatisticas.maiorDano = Math.max(jogador.estatisticas.maiorDano, dano);
-criarNumeroFlutuante(i.x,i.y-20,`-${dano}`, corArma, 22);
-criarParticula(i.x,i.y, corArma, 8 * tamanho, {}, 12);
-acertou = true;
-
-let ang = Math.atan2(i.y - jogador.y, i.x - jogador.x);
-i.x += Math.cos(ang) * 20 * tamanho;
-i.y += Math.sin(ang) * 20 * tamanho;
-
-// Efeito vampírico
-let arma = getArmaEquipada();
-if(arma && arma.vidaBonus){
-jogador.hp = Math.min(jogador.maxHp, jogador.hp + Math.floor(dano*0.1));
-}
-}
+canvas.addEventListener("mousemove", (e) => {
+    let rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
 });
 
-if(chefe && distancia(jogador.x,jogador.y,chefe.x,chefe.y) < 120 + (25*tamanho)){
-chefe.hp -= dano;
-jogador.estatisticas.danoCausado += dano;
-criarNumeroFlutuante(chefe.x,chefe.y-30,`-${dano}`, corArma, 26);
-criarParticula(chefe.x,chefe.y, corArma, 12 * tamanho, {}, 18);
-acertou = true;
-}
-
-if(acertou) tremorTela = 5;
-}
-
-function usarPocao(){
-jogador.pocoes--;
-jogador.hp = Math.min(jogador.maxHp, jogador.hp + 50);
-jogador.pocaoCooldown = 120;
-criarParticula(jogador.x,jogador.y,"#4aff4a",30,{x:0,y:-2},40);
-criarNumeroFlutuante(jogador.x,jogador.y-30,"+50 HP","#4caf50");
-}
-
-function usarDash(dx,dy){
-if(dx===0 && dy===0){
-dx = Math.cos(jogador.direcao);
-dy = Math.sin(jogador.direcao);
-}
-jogador.x += dx * 200;
-jogador.y += dy * 200;
-jogador.habilidades.dash.cooldown = 150;
-for(let i=0;i<20;i++){
-criarParticula(jogador.x, jogador.y, "#00ffff", 5, 
-{x:dx*2 + (Math.random()-0.5)*2, y:dy*2 + (Math.random()-0.5)*2}, 20);
-}
-tremorTela = 8;
-criarMensagem("Dash!", "#00ffff");
-}
-
-// ================= INIMIGOS =================
-function atualizarInimigos(){
-inimigos = inimigos.filter(i=>{
-if(i.hp<=0){
-jogador.estatisticas.inimigosMortos++;
-jogador.xp += i.recompensaXp || 15;
-jogador.ouro += aleatorioInt(5,15);
-atualizarQuests("matar", 1);
-
-if(Math.random() < 0.2){
-let raridades = ["comum","raro","epico","lendario","mitico"];
-let chances = [0.5,0.3,0.15,0.04,0.01];
-let rand = Math.random();
-let raridade = "comum";
-let acum = 0;
-for(let j=0;j<chances.length;j++){
-acum += chances[j];
-if(rand < acum){
-raridade = raridades[j];
-break;
-}
-}
-let item = gerarItemComEfeito(aleatorioInt(0,1)?"arma":"armadura", raridade, masmorraSelecionada?.dificuldade||1);
-jogador.inventario.push(item);
-jogador.estatisticas.itensColetados++;
-atualizarQuests("itens", 1);
-criarMensagem(`${item.nome} obtido!`, coresRaridade[raridade]);
-}
-
-for(let p=0;p<15;p++){
-criarParticula(i.x,i.y,i.cor,8,{x:aleatorio(-3,3),y:aleatorio(-3,3)},25);
-}
-return false;
-}
-
-let d = distancia(jogador.x, jogador.y, i.x, i.y);
-i.animacao += 0.05;
-
-if(i.tipo === "corpo"){
-let ang = Math.atan2(jogador.y - i.y, jogador.x - i.x);
-i.x += Math.cos(ang) * i.velocidade;
-i.y += Math.sin(ang) * i.velocidade;
-if(d < 35 && i.cooldownAtual === 0){
-danoJogador(i.dano);
-i.cooldownAtual = 40;
-}
-}
-
-if(i.tipo === "atirar"){
-let ang = Math.atan2(jogador.y - i.y, jogador.x - i.x);
-if(d < 150){
-i.x -= Math.cos(ang) * 1.5;
-i.y -= Math.sin(ang) * 1.5;
-}
-i.cooldownAtual--;
-if(i.cooldownAtual <= 0 && d < 400){
-criarProjetil(i.x, i.y, ang, i.dano, "inimigo");
-i.cooldownAtual = i.cooldown;
-}
-}
-
-if(i.tipo === "elite"){
-let ang = Math.atan2(jogador.y - i.y, jogador.x - i.x);
-i.x += Math.cos(ang) * 1.2;
-i.y += Math.sin(ang) * 1.2;
-if(i.cooldownAtual === 0 && d < 80){
-danoJogador(i.dano * 1.5);
-i.cooldownAtual = 60;
-}
-}
-
-if(i.cooldownAtual > 0) i.cooldownAtual--;
-return true;
-});
-
-if(inimigos.length === 0 && !chefe && !masmorraLimpa){
-masmorraLimpa = true;
-criarChefe();
-}
-}
-
-// ================= PROJÉTEIS =================
-function criarProjetil(x,y,ang,dano,origem){
-projetesis.push({
-x,y,
-vx:Math.cos(ang)*5,
-vy:Math.sin(ang)*5,
-dano,
-origem,
-vida:120,
-tamanho:5,
-cor: origem==="jogador"?"#4aff4a":"#ff5555"
-});
-}
-
-function atualizarProjeteis(){
-projetesis = projetesis.filter(p=>{
-p.x += p.vx;
-p.y += p.vy;
-p.vida--;
-
-if(p.origem === "inimigo" && distancia(p.x,p.y,jogador.x,jogador.y) < 25){
-danoJogador(p.dano);
-return false;
-}
-
-if(p.origem === "jogador"){
-for(let i of inimigos){
-if(distancia(p.x,p.y,i.x,i.y) < 30){
-i.hp -= p.dano;
-criarNumeroFlutuante(i.x,i.y-20,`-${p.dano}`,"#ff5555");
-return false;
-}
-}
-if(chefe && distancia(p.x,p.y,chefe.x,chefe.y) < 50){
-chefe.hp -= p.dano;
-criarNumeroFlutuante(chefe.x,chefe.y-30,`-${p.dano}`,"#ffaa00");
-return false;
-}
-}
-return p.vida > 0 && p.x > 0 && p.x < 1100 && p.y > 0 && p.y < 650;
-});
-}
-
-// ================= CHEFE =================
-function atualizarChefe(){
-if(!chefe || !masmorraSelecionada) return;
-
-let d = distancia(jogador.x, jogador.y, chefe.x, chefe.y);
-let ang = Math.atan2(jogador.y - chefe.y, jogador.x - chefe.x);
-
-chefe.x += Math.cos(ang) * (chefe.enfurecido ? 1.8 : 1.2);
-chefe.y += Math.sin(ang) * (chefe.enfurecido ? 1.8 : 1.2);
-
-if(chefe.hp < chefe.hpMax/2 && !chefe.enfurecido){
-chefe.enfurecido = true;
-chefe.cor = "#ff4444";
-chefe.dano *= 1.6;
-criarMensagem(chefe.fala[1] || "ENFURECEU!", "#ff0000");
-for(let i=0;i<30;i++){
-criarParticula(chefe.x,chefe.y,"#ff0000",15,{x:aleatorio(-4,4),y:aleatorio(-4,4)},40);
-}
-}
-
-chefe.cooldownAtaque--;
-if(chefe.cooldownAtaque <= 0){
-let ataque = chefe.ataques[chefe.padraoAtaque % chefe.ataques.length];
-chefe.padraoAtaque++;
-
-if(ataque === "investida" || ataque === "dash"){
-chefe.x += Math.cos(ang) * 120;
-chefe.y += Math.sin(ang) * 120;
-tremorTela = 12;
-if(d < 80) danoJogador(chefe.dano * 1.3);
-criarMensagem("INVESTIDA!", chefe.cor);
-}
-if(ataque === "espinhos" || ataque === "projetil"){
-for(let i=-1;i<=1;i+=2){
-criarProjetil(chefe.x, chefe.y, ang + i*0.3, chefe.dano/2, "inimigo");
-}
-}
-if(ataque === "bola de fogo" || ataque === "explosão"){
-for(let i=0;i<3;i++){
-criarProjetil(chefe.x, chefe.y, ang + (i-1)*0.2, chefe.dano, "inimigo");
-}
-}
-if(ataque === "meteoro"){
-for(let i=0;i<5;i++){
-criarProjetil(chefe.x + aleatorio(-50,50), chefe.y - 50, Math.PI/2, chefe.dano, "inimigo");
-}
-criarMensagem("METEORO!", "#ff5500");
-}
-if(ataque === "nevasca"){
-for(let i=0;i<8;i++){
-criarParticula(chefe.x, chefe.y, "#aaddff", 10, {x:aleatorio(-4,4), y:aleatorio(-4,4)}, 30);
-danoJogador(chefe.dano/3);
-}
-}
-if(ataque === "relâmpago"){
-tremorTela = 15;
-danoJogador(chefe.dano);
-criarMensagem("RELÂMPAGO!", "#ffff00");
-}
-
-chefe.cooldownAtaque = chefe.enfurecido ? 40 : 60;
-}
-
-if(d < 50 && chefe.cooldownAtaque%10 === 0){
-danoJogador(chefe.dano);
-}
-
-if(chefe.hp <= 0){
-jogador.estatisticas.chefesDerrotados++;
-jogador.estatisticas.masmorrasCompletadas++;
-jogador.xp += 200 * masmorraSelecionada.dificuldade;
-jogador.ouro += 150 * masmorraSelecionada.dificuldade;
-atualizarQuests("chefe", 1);
-criarMensagem("CHEFE DERROTADO! 🏆", "#ffd700");
-for(let i=0;i<50;i++){
-criarParticula(chefe.x,chefe.y,"#ffd700",15,{x:aleatorio(-5,5),y:aleatorio(-5,5)},40);
-}
-darLoot(4, chefe.x, chefe.y);
-estado = "lobby";
-canvas.style.background = "#0a0f1a";
-chefe = null;
-}
-}
-
-// ================= DANO =================
-function danoJogador(quantidade){
-if(jogador.iframe>0) return;
-let danoFinal = calcularDanoRecebido(quantidade);
-jogador.hp -= danoFinal;
-jogador.iframe = 25;
-tremorTela = 8;
-criarNumeroFlutuante(jogador.x,jogador.y-30,`-${danoFinal}`,"#ff0000",26);
-for(let i=0;i<10;i++){
-criarParticula(jogador.x,jogador.y,"#f00",6,{x:aleatorio(-3,3),y:aleatorio(-3,3)},12);
-}
-}
-
-// ================= ITENS E LOOT =================
-function darLoot(quantidade, x, y){
-for(let l=0;l<quantidade;l++){
-let raridades = ["comum","raro","epico","lendario","mitico"];
-let chances = [0.4,0.3,0.2,0.08,0.02];
-let rand = Math.random();
-let raridade = "comum";
-let acum = 0;
-for(let i=0;i<chances.length;i++){
-acum += chances[i];
-if(rand < acum){
-raridade = raridades[i];
-break;
-}
-}
-
-let tipoSorteado = Math.random();
-let tipo;
-if(tipoSorteado < 0.4) tipo = "arma";
-else if(tipoSorteado < 0.7) tipo = "armadura";
-else if(tipoSorteado < 0.9) tipo = "amuleto";
-else tipo = "anel";
-
-let item = gerarItemComEfeito(tipo, raridade, masmorraSelecionada?.dificuldade||1);
-jogador.inventario.push(item);
-jogador.estatisticas.itensColetados++;
-atualizarQuests("itens", 1);
-criarMensagem(`${item.nome} obtido!`, coresRaridade[raridade]);
-criarParticula(x || jogador.x, y || jogador.y, coresRaridade[raridade], 15, {}, 30);
-}
-}
-
-function equiparItem(indexInventario){
-let item = jogador.inventario[indexInventario];
-if(!item) return;
+canvas.addEventListener("mousedown", () => mouse.clicado = true);
+canvas.addEventListener("mouseup", () => mouse.clicado = false);
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
-let slot;
-if(item.tipo === "arma") slot = 0;
-else if(item.tipo === "armadura") slot = 1;
-else if(item.tipo === "amuleto") slot = 2;
-else if(item.tipo === "anel") slot = 3;
-else return;
-
-if(jogador.equipamento[slot]){
-jogador.inventario.push(jogador.equipamento[slot]);
-}
-jogador.equipamento[slot] = item;
-jogador.inventario.splice(indexInventario, 1);
-
-// Aplicar bônus de atributos
-if(item.forcaBonus) jogador.atributos.forca += item.forcaBonus;
-if(item.agilidadeBonus) jogador.atributos.agilidade += item.agilidadeBonus;
-if(item.constituicaoBonus) jogador.atributos.constituicao += item.constituicaoBonus;
-
-criarMensagem(`${item.nome} equipado!`, coresRaridade[item.raridade]);
-}
-
-// ================= DESENHAR =================
-function desenhar(){
-ctx.save();
-
-if(estado === "dungeon"){
-let tremerX = (Math.random()-0.5)*tremorTela;
-let tremerY = (Math.random()-0.5)*tremorTela;
-ctx.translate(-camera.x + tremerX, -camera.y + tremerY);
-} else {
-ctx.translate(0, 0);
-}
-
-if(estado==="lobby"){
-desenharLobby();
-}
-if(estado==="dungeon"){
-desenharMasmorra();
-}
-
-ctx.restore();
-desenharUI();
-}
-
-function desenharLobby(){
-ctx.fillStyle = "#0f1222";
-ctx.fillRect(0,0,canvas.width,canvas.height);
-
-ctx.font = "bold 48px 'Segoe UI'";
-ctx.fillStyle = "#fff";
-ctx.shadowColor = "#4a9eff";
-ctx.shadowBlur = 20;
-ctx.fillText("⚔️ RPG DAS MASMORRAS ⚔️", 150, 80);
-ctx.shadowBlur = 0;
-
-// Skill Points
-ctx.fillStyle = "#4aff4a";
-ctx.font = "bold 24px Arial";
-ctx.fillText(`✨ Skill Points: ${skillPoints}`, 40, 130);
-
-// Card do jogador
-ctx.fillStyle = "#2a2f3f";
-ctx.shadowBlur = 15;
-ctx.shadowColor = "#000";
-ctx.fillRect(40,150,320,200);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 20px Arial";
-ctx.fillText(`Nível ${jogador.nivel} Guerreiro`,60,180);
-ctx.font = "16px Arial";
-ctx.fillText(`❤️ ${jogador.hp}/${jogador.maxHp}`,60,210);
-ctx.fillText(`✨ XP: ${jogador.xp}/${jogador.nivel*100}`,60,240);
-ctx.fillText(`🪙 Ouro: ${jogador.ouro}`,60,270);
-ctx.fillText(`⚔️ Dano: ${getDanoJogador()}`,60,300);
-ctx.fillText(`🛡️ Defesa: ${Math.floor(getDefesa())}`,60,330);
-
-// Slots de equipamento
-ctx.fillStyle = "#1a1f2a";
-ctx.fillRect(40,360,320,80);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 14px Arial";
-ctx.fillText("EQUIPAMENTOS", 150, 355);
-
-for(let s=0;s<4;s++){
-let x = 50 + s*80;
-ctx.fillStyle = s === slotSelecionado ? "#4a9eff" : "#333";
-ctx.fillRect(x,370,60,60);
-if(jogador.equipamento[s]){
-ctx.fillStyle = jogador.equipamento[s].corEfeito || coresRaridade[jogador.equipamento[s].raridade];
-ctx.font = "10px Arial";
-ctx.fillText(jogador.equipamento[s].nome.substring(0,6), x+5, 440);
-ctx.fillText(`+${jogador.equipamento[s].poder}`, x+5, 455);
-}
-}
-
-// Skill Tree
-ctx.fillStyle = "#1a1f2a";
-ctx.fillRect(380,140,300,380);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.fillText("SKILL TREE", 460, 165);
-ctx.font = "14px Arial";
-
-let skillsY = 190;
-for(let [nome, skill] of Object.entries(skillTree)){
-if(nome === "dash" || nome === "duploSlash") continue;
-let cor = skill.nivel >= skill.max ? "#ffaa00" : "#4aff4a";
-ctx.fillStyle = "#333";
-ctx.fillRect(390, skillsY, 280, 30);
-ctx.fillStyle = cor;
-ctx.fillRect(390, skillsY, 280 * (skill.nivel/skill.max), 30);
-ctx.fillStyle = "#fff";
-ctx.fillText(`${nome}: ${skill.nivel}/${skill.max}`, 400, skillsY+20);
-ctx.fillText(skill.desc, 400, skillsY+45);
-if(mouse.clicado && mouse.x > 390 && mouse.x < 670 && mouse.y > skillsY && mouse.y < skillsY+30){
-comprarSkill(nome);
-}
-skillsY += 50;
-}
-
-// Habilidades especiais
-ctx.fillStyle = "#333";
-ctx.fillRect(380,540,300,80);
-ctx.fillStyle = jogador.habilidades.dash.desbloqueada ? "#00ffff" : "#666";
-ctx.fillText(`Dash: ${jogador.habilidades.dash.desbloqueada ? "✓" : "✗"} (Quest)`, 390, 560);
-ctx.fillStyle = jogador.habilidades.duploSlash.desbloqueada ? "#ffaa00" : "#666";
-ctx.fillText(`Duplo Ataque: ${jogador.habilidades.duploSlash.desbloqueada ? "✓" : "✗"} (Quest)`, 390, 580);
-if(!jogador.habilidades.dash.desbloqueada && mouse.clicado && mouse.x > 380 && mouse.x < 680 && mouse.y > 540 && mouse.y < 580){
-comprarSkill("dash");
-}
-if(!jogador.habilidades.duploSlash.desbloqueada && mouse.clicado && mouse.x > 380 && mouse.x < 680 && mouse.y > 580 && mouse.y < 620){
-comprarSkill("duploSlash");
-}
-
-// Masmorras
-ctx.fillStyle = "#1a1f2a";
-ctx.fillRect(700,140,350,380);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.fillText("MASMORRAS", 800, 165);
-
-masmorras.forEach((m,i)=>{
-let x = 710;
-let y = 180 + i*65;
-let sobre = mouse.x>x && mouse.x<x+330 && mouse.y>y && mouse.y<y+55;
-
-ctx.fillStyle = sobre ? m.cor : "#2a2f3f";
-ctx.fillRect(x,y,330,55);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 16px Arial";
-ctx.fillText(`${m.icon} ${m.nome}`, x+10, y+25);
-ctx.font = "12px Arial";
-ctx.fillText(`Dificuldade: ${m.dificuldade}`, x+10, y+45);
-
-if(mouse.clicado && sobre){
-iniciarMasmorra(m);
-}
-});
-
-// Quests
-ctx.fillStyle = "#1a1f2a";
-ctx.fillRect(40,450,320,170);
-ctx.fillStyle = "#ffaa00";
-ctx.font = "bold 16px Arial";
-ctx.fillText("QUESTS", 150, 470);
-
-questsDisponiveis.forEach((q,i)=>{
-let y = 490 + i*40;
-ctx.fillStyle = q.completa ? "#4aff4a" : "#fff";
-ctx.font = "14px Arial";
-ctx.fillText(`${q.nome}: ${q.progresso}/${q.meta}`, 50, y);
-ctx.font = "11px Arial";
-ctx.fillText(q.desc, 50, y+15);
-});
-
-// Abas do inventário
-ctx.fillStyle = "#1a1f2a";
-ctx.fillRect(700,540,350,80);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 16px Arial";
-ctx.fillText("INVENTÁRIO", 820, 560);
-
-let abas = ["todos", "armas", "armaduras", "amuletos", "aneis"];
-let abasX = [710, 770, 830, 890, 950];
-abas.forEach((aba, i)=>{
-ctx.fillStyle = aba === abaInventario ? "#4a9eff" : "#333";
-ctx.fillRect(abasX[i], 570, 50, 30);
-ctx.fillStyle = "#fff";
-ctx.font = "10px Arial";
-ctx.fillText(aba, abasX[i]+5, 590);
-if(mouse.clicado && mouse.x > abasX[i] && mouse.x < abasX[i]+50 && mouse.y > 570 && mouse.y < 600){
-abaInventario = aba;
-}
-});
-
-// Itens do inventário
-let itensFiltrados = jogador.inventario.filter(item => {
-if(abaInventario === "todos") return true;
-if(abaInventario === "armas") return item.tipo === "arma";
-if(abaInventario === "armaduras") return item.tipo === "armadura";
-if(abaInventario === "amuletos") return item.tipo === "amuleto";
-if(abaInventario === "aneis") return item.tipo === "anel";
-});
-
-itensFiltrados.slice(0,5).forEach((item,i)=>{
-let x = 710 + (i%5)*70;
-let y = 610;
-ctx.fillStyle = item.corEfeito || coresRaridade[item.raridade];
-ctx.fillRect(x,y,60,60);
-ctx.fillStyle = "#fff";
-ctx.font = "8px Arial";
-ctx.fillText(item.nome.substring(0,8), x+5, y+70);
-ctx.fillText(`+${item.poder}`, x+5, y+80);
-
-// Tooltip com efeito
-if(mouse.x > x && mouse.x < x+60 && mouse.y > y && mouse.y < y+60){
-ctx.fillStyle = "#000";
-ctx.fillRect(mouse.x+10, mouse.y-60, 150, 50);
-ctx.fillStyle = "#fff";
-ctx.font = "10px Arial";
-ctx.fillText(item.nome, mouse.x+15, mouse.y-45);
-ctx.fillText(`Poder: ${item.poder}`, mouse.x+15, mouse.y-30);
-if(item.descEfeito){
-ctx.fillStyle = item.corEfeito;
-ctx.fillText(item.descEfeito, mouse.x+15, mouse.y-15);
-}
-}
-
-if(mouse.clicado && mouse.x > x && mouse.x < x+60 && mouse.y > y && mouse.y < y+60){
-equiparItem(jogador.inventario.indexOf(item));
-}
-});
-
-if(mouse.clicado) mouse.clicado=false;
-}
-
-function desenharMasmorra(){
-if(!masmorraSelecionada) return;
-
-ctx.fillStyle = masmorraSelecionada.corFundo;
-ctx.fillRect(-100,-100,canvas.width*2,canvas.height*2);
-
-ctx.strokeStyle = masmorraSelecionada.cor + "33";
-ctx.lineWidth = 1;
-for(let i=-200;i<canvas.width+200;i+=70){
-ctx.beginPath();
-ctx.moveTo(i,-100);
-ctx.lineTo(i,canvas.height+100);
-ctx.strokeStyle = masmorraSelecionada.cor + "22";
-ctx.stroke();
-}
-for(let i=-200;i<canvas.height+200;i+=70){
-ctx.beginPath();
-ctx.moveTo(-100,i);
-ctx.lineTo(canvas.width+100,i);
-ctx.stroke();
-}
-
-slashes.forEach(s=>{
-let alpha = s.vida/s.vidaMax;
-ctx.save();
-ctx.translate(s.x, s.y);
-ctx.rotate(s.direcao);
-ctx.globalAlpha = alpha * 0.8;
-ctx.fillStyle = s.cor;
-ctx.shadowBlur = 20;
-ctx.shadowColor = s.cor;
-
-ctx.beginPath();
-ctx.moveTo(0, -s.largura/2);
-ctx.quadraticCurveTo(s.comprimento/2, -s.largura/2 - 10, s.comprimento, -s.largura/2);
-ctx.lineTo(s.comprimento, s.largura/2);
-ctx.quadraticCurveTo(s.comprimento/2, s.largura/2 + 10, 0, s.largura/2);
-ctx.closePath();
-ctx.fill();
-ctx.restore();
-});
-
-projetesis.forEach(p=>{
-ctx.fillStyle = p.cor;
-ctx.shadowBlur = 15;
-ctx.shadowColor = p.cor;
-ctx.beginPath();
-ctx.arc(p.x, p.y, p.tamanho, 0, Math.PI*2);
-ctx.fill();
-});
-
-inimigos.forEach(i=>{
-ctx.fillStyle = i.cor;
-ctx.shadowBlur = 25;
-ctx.shadowColor = i.cor;
-ctx.beginPath();
-ctx.arc(i.x, i.y, 18 + Math.sin(i.animacao)*2, 0, Math.PI*2);
-ctx.fill();
-
-ctx.shadowBlur = 0;
-ctx.fillStyle = "#000";
-ctx.fillRect(i.x-25, i.y-35, 50, 5);
-ctx.fillStyle = "#f00";
-ctx.fillRect(i.x-25, i.y-35, 50 * (i.hp/i.hpMax), 5);
-});
-
-if(chefe){
-ctx.fillStyle = chefe.cor;
-ctx.shadowBlur = 50;
-ctx.shadowColor = chefe.enfurecido?"#f00":"#a0f";
-ctx.beginPath();
-ctx.arc(chefe.x, chefe.y, 45 + Math.sin(tempoJogo*0.1)*5, 0, Math.PI*2);
-ctx.fill();
-
-ctx.shadowBlur = 0;
-ctx.font = "bold 24px Arial";
-ctx.fillStyle = "#fff";
-ctx.fillText(chefe.nome, chefe.x-100, chefe.y-80);
-ctx.fillStyle = "#000";
-ctx.fillRect(chefe.x-120, chefe.y-60, 240, 20);
-ctx.fillStyle = "#f00";
-ctx.fillRect(chefe.x-120, chefe.y-60, 240 * (chefe.hp/chefe.hpMax), 20);
-}
-
-ctx.shadowBlur = 40;
-ctx.shadowColor = jogador.iframe>0 ? "#f00" : getCorArma();
-ctx.fillStyle = jogador.iframe>0 ? "#ff8888" : "#44aaff";
-
-ctx.beginPath();
-ctx.arc(jogador.x, jogador.y, 22 + Math.sin(jogador.animacao)*2, 0, Math.PI*2);
-ctx.fill();
-
-let arma = getArmaEquipada();
-if(arma){
-ctx.beginPath();
-ctx.moveTo(jogador.x, jogador.y);
-ctx.lineTo(jogador.x + Math.cos(jogador.direcao)*45, jogador.y + Math.sin(jogador.direcao)*45);
-ctx.strokeStyle = arma.corEfeito || coresRaridade[arma.raridade];
-ctx.lineWidth = 6;
-ctx.shadowBlur = 20;
-ctx.stroke();
-}
-
-particulas.forEach(p=>{
-ctx.globalAlpha = p.vida/p.vidaMax;
-ctx.fillStyle = p.cor;
-ctx.beginPath();
-ctx.arc(p.x, p.y, p.tamanho * (p.vida/p.vidaMax), 0, Math.PI*2);
-ctx.fill();
-});
-
-numerosFlutuantes.forEach(n=>{
-ctx.globalAlpha = n.vida/60;
-ctx.font = `bold ${n.tamanho}px Arial`;
-ctx.fillStyle = n.cor;
-ctx.fillText(n.texto, n.x, n.y);
-});
-ctx.globalAlpha = 1;
-ctx.shadowBlur = 0;
-}
-
-function desenharUI(){
-ctx.save();
-ctx.setTransform(1,0,0,1,0,0);
-
-ctx.fillStyle = "#333";
-ctx.fillRect(20,20,300,30);
-ctx.fillStyle = "#f00";
-ctx.fillRect(20,20,300 * (jogador.hp/jogador.maxHp),30);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.fillText(`❤️ ${Math.floor(jogador.hp)}/${jogador.maxHp}`, 140, 45);
-
-ctx.fillStyle = "#333";
-ctx.fillRect(330,20,120,30);
-ctx.fillStyle = "#0f0";
-ctx.fillRect(330,20,120 * (jogador.pocaoCooldown?0:jogador.pocoes/5),30);
-ctx.fillText(`🧪 x${jogador.pocoes}`, 360, 45);
-
-ctx.fillStyle = "#333";
-ctx.fillRect(20,60,300,15);
-ctx.fillStyle = "#ffd700";
-ctx.fillRect(20,60,300 * (jogador.xp/(jogador.nivel*100)),15);
-
-ctx.fillStyle = "#fff";
-ctx.font = "16px Arial";
-ctx.fillText(`Nível ${jogador.nivel}`, 330, 75);
-ctx.fillText(`🪙 ${jogador.ouro}`, 440, 75);
-
-let arma = getArmaEquipada();
-if(arma){
-ctx.fillStyle = arma.corEfeito || coresRaridade[arma.raridade];
-ctx.fillRect(470,20,200,40);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 14px Arial";
-ctx.fillText(`${arma.nome.substring(0,12)} +${arma.poder}`, 480, 45);
-if(arma.descEfeito){
-ctx.font = "10px Arial";
-ctx.fillText(arma.descEfeito, 480, 65);
-}
-}
-
-if(mensagemTemporaria.tempo > 0){
-ctx.globalAlpha = mensagemTemporaria.tempo/120;
-ctx.font = "bold 36px Arial";
-ctx.fillStyle = mensagemTemporaria.cor;
-ctx.shadowBlur = 20;
-ctx.shadowColor = mensagemTemporaria.cor;
-ctx.fillText(mensagemTemporaria.texto, canvas.width/2-150, canvas.height/2-50);
-ctx.shadowBlur = 0;
-ctx.globalAlpha = 1;
-}
-
-if(mensagemQuest.tempo > 0){
-ctx.globalAlpha = mensagemQuest.tempo/180;
-ctx.font = "bold 24px Arial";
-ctx.fillStyle = mensagemQuest.cor;
-ctx.fillText(mensagemQuest.texto, canvas.width/2-150, canvas.height/2-100);
-ctx.globalAlpha = 1;
+// ================= FUNÇÕES =================
+function aleatorio(min, max) {
+    return Math.random() * (max - min) + min;
 }
-
-if(estado==="dungeon" && masmorraSelecionada){
-ctx.fillStyle = masmorraSelecionada.cor;
-ctx.fillRect(20,100,200,50);
-ctx.fillStyle = "#fff";
-ctx.font = "bold 16px Arial";
-ctx.fillText(masmorraSelecionada.nome, 30, 135);
-ctx.fillText(`👥 ${inimigos.length}`, 30, 165);
-if(chefe) ctx.fillText("BOSS ATIVO!", 30, 195);
-}
-
-ctx.fillStyle = "rgba(0,0,0,0.5)";
-ctx.fillRect(canvas.width-220, canvas.height-100, 200, 80);
-ctx.fillStyle = "#fff";
-ctx.font = "12px Arial";
-ctx.fillText("ESPAÇO: Atacar", canvas.width-210, canvas.height-70);
-ctx.fillText("Q: Poção", canvas.width-210, canvas.height-55);
-ctx.fillText("SHIFT: Dash", canvas.width-210, canvas.height-40);
-ctx.fillText("1-4: Slots", canvas.width-210, canvas.height-25);
 
-ctx.restore();
+function aleatorioInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function distancia(x1, y1, x2, y2) {
+    return Math.hypot(x1 - x2, y1 - y2);
+}
+
+function criarMensagem(texto, cor = "#fff") {
+    mensagem = texto;
+    tempoMensagem = 120;
+}
+
+function criarParticula(x, y, cor, tamanho = 3) {
+    for (let i = 0; i < 3; i++) {
+        particulas.push({
+            x: x + aleatorio(-5, 5),
+            y: y + aleatorio(-5, 5),
+            cor: cor,
+            tamanho: tamanho * aleatorio(0.5, 1.5),
+            vx: aleatorio(-2, 2),
+            vy: aleatorio(-2, 2),
+            vida: 20
+        });
+    }
+}
+
+function criarNumero(x, y, texto, cor = "#fff") {
+    numerosFlutuantes.push({
+        x: x,
+        y: y,
+        texto: texto,
+        cor: cor,
+        vy: -1,
+        vida: 40
+    });
+}
+
+function getDanoJogador() {
+    let danoBase = jogador.dano + (jogador.nivel * 2) + (jogador.forca * 2);
+    let arma = jogador.equipamento[0];
+    if (arma) danoBase += arma.poder;
+    return Math.floor(danoBase);
+}
+
+function getDefesaJogador() {
+    let defesaBase = jogador.defesa + (jogador.constituicao * 1);
+    let armadura = jogador.equipamento[1];
+    if (armadura) defesaBase += armadura.poder;
+    return defesaBase;
+}
+
+function getVelocidadeJogador() {
+    return jogador.velocidade + (skillTree.velocidade.nivel * 0.5);
+}
+
+function atacar() {
+    if (jogador.slashCooldown > 0) return;
+    jogador.slashCooldown = 15;
+
+    let dano = getDanoJogador();
+    let corArma = "#ffffff";
+    let arma = jogador.equipamento[0];
+    if (arma) corArma = arma.corEfeito || raridades[arma.raridade].cor;
+
+    // Criar slash
+    for (let i = 0; i < 5; i++) {
+        criarParticula(jogador.x + Math.cos(jogador.direcao) * 40, jogador.y + Math.sin(jogador.direcao) * 40, corArma, 8);
+    }
+
+    // Acertar inimigos
+    inimigos.forEach(i => {
+        if (distancia(jogador.x, jogador.y, i.x, i.y) < 80) {
+            i.hp -= dano;
+            criarNumero(i.x, i.y - 20, `-${dano}`, "#ff5555");
+            criarParticula(i.x, i.y, "#ff0000", 5);
+        }
+    });
+
+    // Acertar chefe
+    if (chefe && distancia(jogador.x, jogador.y, chefe.x, chefe.y) < 100) {
+        chefe.hp -= dano;
+        criarNumero(chefe.x, chefe.y - 30, `-${dano}`, "#ffaa00");
+        criarParticula(chefe.x, chefe.y, "#ffaa00", 8);
+    }
+}
+
+function usarPocao() {
+    if (jogador.pocoes <= 0) return;
+    jogador.pocoes--;
+    jogador.hp = Math.min(jogador.maxHp, jogador.hp + 50);
+    criarMensagem("Poção usada! +50 HP", "#4caf50");
+    criarParticula(jogador.x, jogador.y, "#4caf50", 10);
+}
+
+function usarDash() {
+    if (!jogador.habilidades.dash || jogador.habilidades.dashCooldown > 0) return;
+    
+    let dx = Math.cos(jogador.direcao) * 150;
+    let dy = Math.sin(jogador.direcao) * 150;
+    jogador.x += dx;
+    jogador.y += dy;
+    jogador.habilidades.dashCooldown = 120;
+    criarMensagem("Dash!", "#00ffff");
+    for (let i = 0; i < 10; i++) {
+        criarParticula(jogador.x, jogador.y, "#00ffff", 5);
+    }
+}
+
+function iniciarMasmorra(m) {
+    masmorraSelecionada = m;
+    estado = "dungeon";
+    inimigos = [];
+    chefe = null;
+    
+    // Centralizar jogador
+    jogador.x = canvas.width / 2;
+    jogador.y = canvas.height / 2;
+    
+    // Criar inimigos
+    for (let i = 0; i < m.inimigos; i++) {
+        inimigos.push({
+            x: aleatorio(200, 900),
+            y: aleatorio(100, 500),
+            hp: 30 + (m.dificuldade * 10),
+            maxHp: 30 + (m.dificuldade * 10),
+            dano: 5 + (m.dificuldade * 2),
+            tipo: Math.random() > 0.5 ? "melee" : "ranged",
+            cor: m.cor,
+            xp: 10 * m.dificuldade
+        });
+    }
+    
+    criarMensagem(`Entrou em ${m.nome}`, m.cor);
+}
+
+function criarChefe() {
+    if (!masmorraSelecionada) return;
+    
+    chefe = {
+        nome: "Guardião " + masmorraSelecionada.nome,
+        x: aleatorio(400, 700),
+        y: 200,
+        hp: 200 * masmorraSelecionada.dificuldade,
+        maxHp: 200 * masmorraSelecionada.dificuldade,
+        dano: 15 * masmorraSelecionada.dificuldade,
+        cor: masmorraSelecionada.cor
+    };
+    
+    criarMensagem("CHEFE APARECEU!", "#ff5500");
+    criarParticula(chefe.x, chefe.y, "#ff5500", 20);
+}
+
+function gerarItem() {
+    let raridadeNomes = ["comum", "raro", "epico", "lendario"];
+    let raridade = raridadeNomes[Math.floor(Math.random() * raridadeNomes.length)];
+    let tipo = Math.random() > 0.5 ? "arma" : "armadura";
+    
+    let item = {
+        tipo: tipo,
+        poder: aleatorioInt(5, 15) * raridades[raridade].mult,
+        raridade: raridade,
+        nome: (tipo === "arma" ? "Espada " : "Armadura ") + raridade
+    };
+    
+    // 30% de chance de ter efeito
+    if (Math.random() < 0.3) {
+        let efeito = efeitosItens[Math.floor(Math.random() * efeitosItens.length)];
+        item.efeito = efeito.nome;
+        item.corEfeito = efeito.cor;
+        item.nome = efeito.nome + " " + item.nome;
+    }
+    
+    return item;
+}
+
+function equiparItem(index) {
+    let item = jogador.inventario[index];
+    if (!item) return;
+    
+    let slot = item.tipo === "arma" ? 0 : 1;
+    
+    // Devolver item atual
+    if (jogador.equipamento[slot]) {
+        jogador.inventario.push(jogador.equipamento[slot]);
+    }
+    
+    jogador.equipamento[slot] = item;
+    jogador.inventario.splice(index, 1);
+    criarMensagem(`${item.nome} equipado!`, item.corEfeito || raridades[item.raridade].cor);
+}
+
+function atualizarQuests(tipo) {
+    quests.forEach(q => {
+        if (!q.completa && q.desc.includes(tipo)) {
+            q.progresso++;
+            if (q.progresso >= q.meta) {
+                q.completa = true;
+                if (q.recompensa === "dash") {
+                    jogador.habilidades.dash = true;
+                    criarMensagem("DASH DESBLOQUEADO!", "#00ffff");
+                } else {
+                    jogador.ouro += 100;
+                    criarMensagem("Quest completa! +100 ouro", "#ffd700");
+                }
+            }
+        }
+    });
+}
+
+function comprarSkill(skill) {
+    if (skillPoints <= 0) return;
+    let s = skillTree[skill];
+    if (s.nivel < s.max) {
+        s.nivel++;
+        skillPoints--;
+        criarMensagem(`${skill} +1`, "#4aff4a");
+    }
+}
+
+// ================= UPDATE =================
+function update() {
+    if (estado === "lobby") {
+        // Nada por enquanto
+    }
+    
+    if (estado === "dungeon") {
+        // Movimento do jogador
+        let dx = 0, dy = 0;
+        if (teclas["w"] || teclas["ArrowUp"]) dy--;
+        if (teclas["s"] || teclas["ArrowDown"]) dy++;
+        if (teclas["a"] || teclas["ArrowLeft"]) dx--;
+        if (teclas["d"] || teclas["ArrowRight"]) dx++;
+        
+        if (dx !== 0 || dy !== 0) {
+            let len = Math.hypot(dx, dy);
+            dx /= len;
+            dy /= len;
+            jogador.x += dx * getVelocidadeJogador();
+            jogador.y += dy * getVelocidadeJogador();
+            jogador.direcao = Math.atan2(dy, dx);
+            jogador.animacao += 0.1;
+        }
+        
+        // Limites
+        jogador.x = Math.max(50, Math.min(1050, jogador.x));
+        jogador.y = Math.max(50, Math.min(600, jogador.y));
+        
+        // Ataque
+        if (teclas[" "]) atacar();
+        
+        // Poção
+        if (teclas["q"]) usarPocao();
+        
+        // Dash
+        if (teclas["Shift"]) usarDash();
+        
+        // Cooldowns
+        if (jogador.slashCooldown > 0) jogador.slashCooldown--;
+        if (jogador.habilidades.dashCooldown > 0) jogador.habilidades.dashCooldown--;
+        
+        // Atualizar inimigos
+        inimigos = inimigos.filter(i => {
+            if (i.hp <= 0) {
+                jogador.xp += i.xp;
+                jogador.ouro += aleatorioInt(5, 10);
+                atualizarQuests("inimigos");
+                criarParticula(i.x, i.y, i.cor, 10);
+                return false;
+            }
+            
+            // Movimento do inimigo
+            let ang = Math.atan2(jogador.y - i.y, jogador.x - i.x);
+            i.x += Math.cos(ang) * 1;
+            i.y += Math.sin(ang) * 1;
+            
+            // Dano ao jogador
+            if (distancia(jogador.x, jogador.y, i.x, i.y) < 30 && jogador.iframe === 0) {
+                let dano = Math.max(1, i.dano - getDefesaJogador() / 2);
+                jogador.hp -= dano;
+                jogador.iframe = 30;
+                criarNumero(jogador.x, jogador.y - 20, `-${dano}`, "#ff0000");
+                criarParticula(jogador.x, jogador.y, "#ff0000", 8);
+            }
+            
+            return true;
+        });
+        
+        // Atualizar chefe
+        if (chefe) {
+            if (chefe.hp <= 0) {
+                jogador.xp += 100 * masmorraSelecionada.dificuldade;
+                jogador.ouro += 100 * masmorraSelecionada.dificuldade;
+                atualizarQuests("chefe");
+                criarMensagem("CHEFE DERROTADO!", "#ffd700");
+                criarParticula(chefe.x, chefe.y, "#ffd700", 30);
+                
+                // Dar item
+                for (let i = 0; i < 2; i++) {
+                    jogador.inventario.push(gerarItem());
+                }
+                
+                chefe = null;
+                estado = "lobby";
+            }
+            
+            // Movimento do chefe
+            let ang = Math.atan2(jogador.y - chefe.y, jogador.x - chefe.x);
+            chefe.x += Math.cos(ang) * 0.8;
+            chefe.y += Math.sin(ang) * 0.8;
+            
+            // Dano do chefe
+            if (distancia(jogador.x, jogador.y, chefe.x, chefe.y) < 50 && jogador.iframe === 0) {
+                let dano = Math.max(1, chefe.dano - getDefesaJogador() / 2);
+                jogador.hp -= dano;
+                jogador.iframe = 30;
+                criarNumero(jogador.x, jogador.y - 20, `-${dano}`, "#ff0000");
+            }
+        }
+        
+        // Spawnar chefe quando inimigos acabam
+        if (inimigos.length === 0 && !chefe) {
+            criarChefe();
+        }
+        
+        // Verificar morte do jogador
+        if (jogador.hp <= 0) {
+            jogador.hp = jogador.maxHp;
+            estado = "lobby";
+            criarMensagem("Você morreu...", "#ff0000");
+        }
+    }
+    
+    // Iframe
+    if (jogador.iframe > 0) jogador.iframe--;
+    
+    // Atualizar partículas
+    particulas = particulas.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vida--;
+        return p.vida > 0;
+    });
+    
+    // Atualizar números
+    numerosFlutuantes = numerosFlutuantes.filter(n => {
+        n.y += n.vy;
+        n.vida--;
+        return n.vida > 0;
+    });
+    
+    // Mensagem
+    if (tempoMensagem > 0) tempoMensagem--;
+}
+
+// ================= DRAW =================
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (estado === "lobby") {
+        drawLobby();
+    } else {
+        drawDungeon();
+    }
+    
+    drawUI();
+}
+
+function drawLobby() {
+    // Fundo
+    ctx.fillStyle = "#2a2f3f";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Título
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 40px Arial";
+    ctx.fillText("⚔️ RPG DAS MASMORRAS ⚔️", 250, 60);
+    
+    // Card do jogador
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(30, 80, 300, 250);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px Arial";
+    ctx.fillText("JOGADOR", 120, 110);
+    ctx.font = "16px Arial";
+    ctx.fillText(`❤️ HP: ${jogador.hp}/${jogador.maxHp}`, 50, 150);
+    ctx.fillText(`📊 Nível: ${jogador.nivel}`, 50, 180);
+    ctx.fillText(`✨ XP: ${jogador.xp}/${jogador.nivel * 100}`, 50, 210);
+    ctx.fillText(`🪙 Ouro: ${jogador.ouro}`, 50, 240);
+    ctx.fillText(`⚔️ Dano: ${getDanoJogador()}`, 50, 270);
+    ctx.fillText(`🛡️ Defesa: ${getDefesaJogador()}`, 50, 300);
+    
+    // Slots de equipamento
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(30, 340, 300, 80);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "14px Arial";
+    ctx.fillText("EQUIPAMENTOS", 130, 330);
+    
+    for (let i = 0; i < 4; i++) {
+        let x = 40 + i * 75;
+        ctx.fillStyle = "#333";
+        ctx.fillRect(x, 350, 60, 60);
+        if (jogador.equipamento[i]) {
+            let item = jogador.equipamento[i];
+            ctx.fillStyle = item.corEfeito || raridades[item.raridade].cor;
+            ctx.font = "10px Arial";
+            ctx.fillText(item.nome.substring(0, 6), x + 5, 420);
+        }
+    }
+    
+    // Skill Tree
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(350, 80, 300, 300);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText("SKILL TREE", 430, 110);
+    ctx.font = "14px Arial";
+    ctx.fillText(`Pontos: ${skillPoints}`, 430, 140);
+    
+    let y = 170;
+    for (let [nome, skill] of Object.entries(skillTree)) {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(360, y, 280, 30);
+        ctx.fillStyle = "#4caf50";
+        ctx.fillRect(360, y, 280 * (skill.nivel / skill.max), 30);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(`${nome}: ${skill.nivel}/${skill.max}`, 370, y + 20);
+        
+        // Botão de comprar
+        ctx.fillStyle = skillPoints > 0 && skill.nivel < skill.max ? "#ffaa00" : "#666";
+        ctx.fillRect(610, y, 30, 30);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 16px Arial";
+        ctx.fillText("+", 618, y + 22);
+        
+        if (mouse.clicado && mouse.x > 610 && mouse.x < 640 && mouse.y > y && mouse.y < y + 30) {
+            comprarSkill(nome);
+        }
+        
+        y += 40;
+    }
+    
+    // Quests
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(350, 390, 300, 150);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText("QUESTS", 450, 420);
+    
+    quests.forEach((q, i) => {
+        ctx.fillStyle = q.completa ? "#4caf50" : "#ffffff";
+        ctx.font = "14px Arial";
+        ctx.fillText(`${q.nome}: ${q.progresso}/${q.meta}`, 370, 460 + i * 30);
+    });
+    
+    // Masmorras
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(670, 80, 400, 460);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText("MASMORRAS", 810, 110);
+    
+    masmorras.forEach((m, i) => {
+        let y = 150 + i * 75;
+        let sobre = mouse.x > 680 && mouse.x < 1060 && mouse.y > y && mouse.y < y + 60;
+        
+        ctx.fillStyle = sobre ? m.cor : "#333";
+        ctx.fillRect(680, y, 380, 60);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 16px Arial";
+        ctx.fillText(m.nome, 700, y + 25);
+        ctx.font = "12px Arial";
+        ctx.fillText(`Dificuldade: ${m.dificuldade}`, 700, y + 45);
+        
+        if (mouse.clicado && sobre) {
+            iniciarMasmorra(m);
+        }
+    });
+    
+    // Inventário
+    ctx.fillStyle = "#1a1f2a";
+    ctx.fillRect(30, 430, 300, 200);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 16px Arial";
+    ctx.fillText("INVENTÁRIO", 120, 460);
+    
+    jogador.inventario.slice(0, 8).forEach((item, i) => {
+        let x = 40 + (i % 4) * 70;
+        let y = 480 + Math.floor(i / 4) * 70;
+        
+        ctx.fillStyle = item.corEfeito || raridades[item.raridade].cor;
+        ctx.fillRect(x, y, 60, 60);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "8px Arial";
+        ctx.fillText(item.nome.substring(0, 8), x + 5, y + 70);
+        ctx.fillText(`+${item.poder}`, x + 5, y + 80);
+        
+        if (mouse.clicado && mouse.x > x && mouse.x < x + 60 && mouse.y > y && mouse.y < y + 60) {
+            equiparItem(jogador.inventario.indexOf(item));
+        }
+    });
+    
+    if (mouse.clicado) mouse.clicado = false;
+}
+
+function drawDungeon() {
+    // Fundo da dungeon
+    ctx.fillStyle = masmorraSelecionada ? masmorraSelecionada.corFundo || "#1a1f2a" : "#1a1f2a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Grid
+    ctx.strokeStyle = "#334455";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < canvas.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.strokeStyle = "#223344";
+        ctx.stroke();
+    }
+    for (let i = 0; i < canvas.height; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+    }
+    
+    // Inimigos
+    inimigos.forEach(i => {
+        ctx.fillStyle = i.cor;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = i.cor;
+        ctx.beginPath();
+        ctx.arc(i.x, i.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Barra de vida
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(i.x - 25, i.y - 35, 50, 5);
+        ctx.fillStyle = "#f00";
+        ctx.fillRect(i.x - 25, i.y - 35, 50 * (i.hp / i.maxHp), 5);
+    });
+    
+    // Chefe
+    if (chefe) {
+        ctx.fillStyle = chefe.cor;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = chefe.cor;
+        ctx.beginPath();
+        ctx.arc(chefe.x, chefe.y, 40, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Barra de vida do chefe
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(chefe.x - 100, chefe.y - 60, 200, 15);
+        ctx.fillStyle = "#f00";
+        ctx.fillRect(chefe.x - 100, chefe.y - 60, 200 * (chefe.hp / chefe.maxHp), 15);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Arial";
+        ctx.fillText(chefe.nome, chefe.x - 80, chefe.y - 70);
+    }
+    
+    // Jogador
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = jogador.iframe > 0 ? "#ff0000" : "#00ffff";
+    ctx.fillStyle = jogador.iframe > 0 ? "#ff8888" : "#44aaff";
+    ctx.beginPath();
+    ctx.arc(jogador.x, jogador.y, 25 + Math.sin(jogador.animacao) * 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Partículas
+    particulas.forEach(p => {
+        ctx.globalAlpha = p.vida / 20;
+        ctx.fillStyle = p.cor;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.tamanho, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Números flutuantes
+    numerosFlutuantes.forEach(n => {
+        ctx.globalAlpha = n.vida / 40;
+        ctx.font = "bold 20px Arial";
+        ctx.fillStyle = n.cor;
+        ctx.fillText(n.texto, n.x, n.y);
+    });
+    
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+}
+
+function drawUI() {
+    // Barra de vida
+    ctx.fillStyle = "#333";
+    ctx.fillRect(20, 20, 300, 30);
+    ctx.fillStyle = "#f00";
+    ctx.fillRect(20, 20, 300 * (jogador.hp / jogador.maxHp), 30);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px Arial";
+    ctx.fillText(`❤️ ${Math.floor(jogador.hp)}/${jogador.maxHp}`, 140, 45);
+    
+    // Poções
+    ctx.fillStyle = "#333";
+    ctx.fillRect(330, 20, 80, 30);
+    ctx.fillStyle = "#0f0";
+    ctx.fillRect(330, 20, 80 * (jogador.pocoes / 3), 30);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(`🧪 ${jogador.pocoes}`, 350, 45);
+    
+    // XP
+    ctx.fillStyle = "#333";
+    ctx.fillRect(20, 60, 300, 15);
+    ctx.fillStyle = "#ffd700";
+    ctx.fillRect(20, 60, 300 * (jogador.xp / (jogador.nivel * 100)), 15);
+    
+    // Dash cooldown
+    if (jogador.habilidades.dash) {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(330, 60, 80, 20);
+        ctx.fillStyle = "#00ffff";
+        ctx.fillRect(330, 60, 80 * (1 - jogador.habilidades.dashCooldown / 120), 20);
+        ctx.fillStyle = "#fff";
+        ctx.font = "12px Arial";
+        ctx.fillText("DASH", 350, 77);
+    }
+    
+    // Mensagem
+    if (tempoMensagem > 0) {
+        ctx.globalAlpha = tempoMensagem / 120;
+        ctx.font = "bold 30px Arial";
+        ctx.fillStyle = "#fff";
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00ffff";
+        ctx.fillText(mensagem, canvas.width / 2 - 150, canvas.height / 2);
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+    }
+    
+    // Controles
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(canvas.width - 200, canvas.height - 100, 180, 80);
+    ctx.fillStyle = "#fff";
+    ctx.font = "12px Arial";
+    ctx.fillText("ESPAÇO: Atacar", canvas.width - 190, canvas.height - 70);
+    ctx.fillText("Q: Poção", canvas.width - 190, canvas.height - 55);
+    ctx.fillText("SHIFT: Dash", canvas.width - 190, canvas.height - 40);
+    ctx.fillText("WASD: Mover", canvas.width - 190, canvas.height - 25);
 }
 
 // ================= LOOP =================
-function loop(){
-atualizar();
-desenhar();
-requestAnimationFrame(loop);
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
 }
-loop();
+
+gameLoop();
 </script>
 </body>
 </html>
